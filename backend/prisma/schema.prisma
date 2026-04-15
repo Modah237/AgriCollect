@@ -1,0 +1,287 @@
+// AgriCollect CM — Schéma Prisma
+// Base de données : PostgreSQL (Supabase)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── ENUMS ───────────────────────────────────────────────────────────────────
+
+enum PlanTier {
+  STARTER   // < 50 membres, 10 000 XAF/mois
+  BUSINESS  // 50-200 membres, 25 000 XAF/mois
+  PRO       // > 200 membres / Unions, 50 000 XAF/mois
+}
+
+enum UserRole {
+  COLLECTOR   // Collecteur terrain (auth par PIN)
+  MANAGER     // Gestionnaire GIC (auth par email/pw)
+  TREASURER   // Trésorier GIC (lecture + validation paiements)
+  SUPER_ADMIN // Admin plateforme AgriCollect
+}
+
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  CLOSED
+}
+
+enum QualityGrade {
+  A // Qualité supérieure
+  B // Qualité standard
+  C // Qualité inférieure / déclassé
+}
+
+enum PaymentBatchStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  PARTIAL   // Certains paiements ont échoué
+  CANCELLED
+}
+
+enum PaymentLineStatus {
+  PENDING
+  SUBMITTED  // Envoyé à Campay, en attente webhook
+  CONFIRMED  // Paiement MoMo confirmé
+  FAILED     // Échec définitif après retries
+}
+
+// ─── ORGANISATIONS ───────────────────────────────────────────────────────────
+
+model Gic {
+  id                String    @id @default(cuid())
+  name              String
+  region            String
+  cultureTypes      String[]  // ex: ["cacao", "cafe", "plantain"]
+  planTier          PlanTier  @default(STARTER)
+  campayMerchantId  String?   // Identifiant marchand Campay
+  phone             String?
+  email             String?
+  isActive          Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relations
+  users       User[]
+  producers   Producer[]
+  campaigns   Campaign[]
+
+  @@map("gics")
+}
+
+model User {
+  id           String    @id @default(cuid())
+  gicId        String
+  email        String?   @unique // Gestionnaire/Trésorier uniquement
+  passwordHash String?           // Gestionnaire/Trésorier uniquement
+  pinHash      String?           // Collecteur uniquement (PIN 4 chiffres)
+  fullName     String
+  role         UserRole
+  deviceId     String?           // Identifiant appareil collecteur
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  // Relations
+  gic              Gic              @relation(fields: [gicId], references: [id])
+  deliveries       Delivery[]       @relation("CollectorDeliveries")
+  paymentBatches   PaymentBatch[]   @relation("InitiatedBatches")
+  refreshTokens    RefreshToken[]
+  auditEntries     AuditTrail[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+// ─── PRODUCTEURS ─────────────────────────────────────────────────────────────
+
+model Producer {
+  id            String   @id @default(cuid())
+  gicId         String
+  fullName      String
+  phoneMomo     String               // Numéro MTN MoMo ou Orange Money
+  phoneSms      String?              // Numéro SMS si différent
+  momoOperator  String   @default("MTN") // "MTN" | "ORANGE"
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  gic          Gic            @relation(fields: [gicId], references: [id])
+  deliveries   Delivery[]
+  paymentLines PaymentLine[]
+  advances     Advance[]
+
+  @@map("producers")
+}
+
+// ─── CAMPAGNES & PRIX ────────────────────────────────────────────────────────
+
+model Campaign {
+  id        String         @id @default(cuid())
+  gicId     String
+  name      String                    // ex: "Campagne cacao Oct-Déc 2026"
+  startDate DateTime
+  endDate   DateTime?
+  status    CampaignStatus @default(DRAFT)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  // Relations
+  gic            Gic            @relation(fields: [gicId], references: [id])
+  priceRules     PriceRule[]
+  deliveries     Delivery[]
+  paymentBatches PaymentBatch[]
+
+  @@map("campaigns")
+}
+
+model PriceRule {
+  id           String       @id @default(cuid())
+  campaignId   String
+  culture      String       // ex: "cacao", "cafe", "miel"
+  qualityGrade QualityGrade @default(A)
+  pricePerKg   Int          // En XAF (entier, évite les flottants pour données financières)
+  effectiveFrom DateTime    @default(now()) // Permet changement de prix en cours de campagne
+  createdAt    DateTime     @default(now())
+
+  campaign Campaign @relation(fields: [campaignId], references: [id])
+
+  @@map("price_rules")
+}
+
+// ─── LIVRAISONS ──────────────────────────────────────────────────────────────
+
+model Delivery {
+  id              String       @id @default(cuid())
+  campaignId      String
+  producerId      String
+  collectorId     String
+  culture         String
+  quantityKg      Decimal      @db.Decimal(10, 3) // Précision kg
+  qualityGrade    QualityGrade @default(A)
+  photoUrl        String?      // URL photo de la pesée (optionnelle)
+  pricePerKg      Int          // Prix au moment de la saisie (snapshot)
+  calculatedAmount Int         // quantityKg × pricePerKg en XAF
+  advanceDeducted Int          @default(0) // Avances déduites
+  netDue          Int          // calculatedAmount - advanceDeducted
+  notes           String?      // Note du collecteur
+
+  // Champs offline — clés de déduplication
+  offlineUuid        String    @unique // UUID v4 généré hors ligne sur l'appareil
+  deviceId           String            // Identifiant de l'appareil collecteur
+  createdOfflineAt   DateTime          // Horodatage de saisie sur l'appareil
+  syncedAt           DateTime?         // Null = pas encore synchronisé
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  campaign   Campaign @relation(fields: [campaignId], references: [id])
+  producer   Producer @relation(fields: [producerId], references: [id])
+  collector  User     @relation("CollectorDeliveries", fields: [collectorId], references: [id])
+
+  @@map("deliveries")
+}
+
+// ─── PAIEMENTS ───────────────────────────────────────────────────────────────
+
+model PaymentBatch {
+  id              String             @id @default(cuid())
+  campaignId      String
+  initiatedById   String
+  totalAmount     Int                // En XAF
+  status          PaymentBatchStatus @default(PENDING)
+  campayBatchRef  String?            // Référence batch côté Campay
+  completedAt     DateTime?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  // Relations
+  campaign     Campaign      @relation(fields: [campaignId], references: [id])
+  initiatedBy  User          @relation("InitiatedBatches", fields: [initiatedById], references: [id])
+  lines        PaymentLine[]
+
+  @@map("payment_batches")
+}
+
+model PaymentLine {
+  id              String            @id @default(cuid())
+  batchId         String
+  producerId      String
+  amount          Int               // En XAF
+  status          PaymentLineStatus @default(PENDING)
+  campayTxRef     String?           @unique // Référence transaction Campay (idempotence webhook)
+  confirmedAt     DateTime?
+  failureReason   String?
+  retryCount      Int               @default(0)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  // Relations
+  batch    PaymentBatch @relation(fields: [batchId], references: [id])
+  producer Producer     @relation(fields: [producerId], references: [id])
+
+  @@map("payment_lines")
+}
+
+model Advance {
+  id            String   @id @default(cuid())
+  producerId    String
+  campaignId    String
+  amount        Int      // Montant de l'avance en XAF
+  repaidAmount  Int      @default(0) // Montant déjà déduit des paiements
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  producer Producer @relation(fields: [producerId], references: [id])
+
+  @@map("advances")
+}
+
+// ─── AUDIT & LOGS ────────────────────────────────────────────────────────────
+
+model SyncLog {
+  id             String   @id @default(cuid())
+  deviceId       String
+  collectorId    String
+  syncedAt       DateTime @default(now())
+  recordsCount   Int
+  conflictsCount Int      @default(0)
+
+  @@map("sync_logs")
+}
+
+model AuditTrail {
+  id         String   @id @default(cuid())
+  entityType String   // "delivery", "payment_batch", "payment_line", etc.
+  entityId   String
+  action     String   // "CREATE", "UPDATE", "DELETE", "PAYMENT_INIT", "PAYMENT_CONFIRM"
+  actorId    String
+  oldValue   Json?
+  newValue   Json?
+  createdAt  DateTime @default(now())
+
+  actor User @relation(fields: [actorId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([actorId])
+  @@map("audit_trail")
+}
