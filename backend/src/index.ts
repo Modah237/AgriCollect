@@ -104,22 +104,26 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
 
 const port = Number(PORT) || 3001
 
-app.listen(port, '0.0.0.0', () => {
-  logger.info(`AgriCollect CM API — port ${port} — ${process.env.NODE_ENV ?? 'development'} (0.0.0.0)`)
-
-  // Worker BullMQ (si Redis disponible)
-  process.nextTick(async () => {
-    try {
-      const { getRedisConnection } = await import('./queues/paymentQueue')
-      const conn = getRedisConnection()
-      await conn.connect()
-      const { startPaymentWorker } = await import('./workers/paymentWorker')
-      startPaymentWorker()
-      logger.info('[PaymentWorker] Redis connecté — worker démarré')
-    } catch (err: any) {
-      logger.warn(`[PaymentWorker] Redis non disponible — tâches de fond désactivées: ${err.message}`)
-    }
+// Vercel handles the server listening automatically.
+// We only start the listener if we are NOT running on Vercel.
+if (!process.env.VERCEL) {
+  app.listen(port, '0.0.0.0', () => {
+    logger.info(`AgriCollect CM API — port ${port} — ${process.env.NODE_ENV ?? 'development'} (0.0.0.0)`)
+  
+    // Worker BullMQ (si Redis disponible)
+    process.nextTick(async () => {
+      try {
+        const { getRedisConnection } = await import('./queues/paymentQueue')
+        const conn = getRedisConnection()
+        await conn.connect()
+        const { startPaymentWorker } = await import('./workers/paymentWorker')
+        startPaymentWorker()
+        logger.info('[PaymentWorker] Redis connecté — worker démarré')
+      } catch (err: any) {
+        logger.warn(`[PaymentWorker] Redis non disponible — tâches de fond désactivées: ${err.message}`)
+      }
+    })
   })
-})
+}
 
 export default app
