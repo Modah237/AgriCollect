@@ -28,5 +28,5 @@ RUN npm run build --workspace=backend
 # Exposition du port (Railway injectera la variable PORT)
 EXPOSE 3001
 
-# Commande de démarrage via le workspace
-CMD ["npm", "start", "--workspace=backend"]
+# Commande de démarrage directe vers le fichier compilé
+CMD ["node", "backend/dist/index.js"]
