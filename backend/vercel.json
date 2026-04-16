@@ -1,12 +1,12 @@
 {
   "version": 2,
-  "installCommand": "npm install --legacy-peer-deps && npx prisma generate",
   "builds": [
     {
       "src": "src/index.ts",
       "use": "@vercel/node"
     }
   ],
+
   "routes": [
     {
       "src": "/(.*)",
