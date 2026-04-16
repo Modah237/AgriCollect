@@ -37,7 +37,13 @@ router.post('/sync', authenticate, validate(syncSchema), async (req: Request, re
   const collectorId = req.user!.userId
   const gicId = req.user!.gicId
 
-  const results: Array<{ offlineUuid: string; status: 'created' | 'duplicate' | 'error'; error?: string }> = []
+  const results: Array<{ 
+    offlineUuid: string; 
+    status: 'created' | 'duplicate' | 'error'; 
+    error?: string;
+    advanceDeducted?: number;
+    netDue?: number;
+  }> = []
 
   for (const delivery of deliveries) {
     try {
