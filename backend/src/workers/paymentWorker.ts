@@ -114,8 +114,8 @@ async function processPaymentBatch(job: Job<PaymentJobData>) {
 
   // 5. Calculer le statut final du batch
   const allLines = await prisma.paymentLine.findMany({ where: { batchId } })
-  const confirmed = allLines.filter((l) => l.status === 'CONFIRMED').length
-  const failed = allLines.filter((l) => l.status === 'FAILED').length
+  const confirmed = allLines.filter((l: any) => l.status === 'CONFIRMED').length
+  const failed = allLines.filter((l: any) => l.status === 'FAILED').length
 
   let batchStatus: 'COMPLETED' | 'PARTIAL' | 'CANCELLED'
   if (confirmed === allLines.length) batchStatus = 'COMPLETED'

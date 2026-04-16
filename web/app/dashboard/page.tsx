@@ -132,9 +132,9 @@ export default function DashboardPage() {
         />
         <StatCard
           index={3}
-          label="Valeur Totale"
-          value={stats?.totalAmount ? `${stats.totalAmount.toLocaleString('fr-FR')} XAF` : '0 XAF'}
-          sub="Montant à régler"
+          label="Net à payer"
+          value={stats?.totalNetDue != null ? `${stats.totalNetDue.toLocaleString('fr-FR')} XAF` : '0 XAF'}
+          sub="Après déduction"
           icon={Coins}
           color="bg-amber-500"
         />

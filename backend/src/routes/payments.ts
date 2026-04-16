@@ -164,10 +164,10 @@ paymentsRouter.get('/batches/:id', authenticate, async (req: Request, res: Respo
 
     // Statistiques rapides
     const stats = {
-      pending: batch.lines.filter((l) => l.status === 'PENDING').length,
-      submitted: batch.lines.filter((l) => l.status === 'SUBMITTED').length,
-      confirmed: batch.lines.filter((l) => l.status === 'CONFIRMED').length,
-      failed: batch.lines.filter((l) => l.status === 'FAILED').length,
+      pending: batch.lines.filter((l: any) => l.status === 'PENDING').length,
+      submitted: batch.lines.filter((l: any) => l.status === 'SUBMITTED').length,
+      confirmed: batch.lines.filter((l: any) => l.status === 'CONFIRMED').length,
+      failed: batch.lines.filter((l: any) => l.status === 'FAILED').length,
       total: batch.lines.length,
     }
 

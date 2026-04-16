@@ -31,12 +31,8 @@ router.get(
       return
     }
 
-    type DeliveryWithRelations = Prisma.DeliveryGetPayload<{
-      include: {
-        producer: { select: { fullName: true; phoneMomo: true } }
-        collector: { select: { fullName: true } }
-      }
-    }>
+    // Utilisation de any temporairement pour contourner l'erreur de Namespace Prisma sur Vercel
+    type DeliveryWithRelations = any
 
     const deliveries: DeliveryWithRelations[] = await prisma.delivery.findMany({
       where: { campaignId },
@@ -135,9 +131,7 @@ router.post(
       return
     }
 
-    type DeliveryWithProducer = Prisma.DeliveryGetPayload<{
-      include: { producer: { select: { fullName: true } } }
-    }>
+    type DeliveryWithProducer = any
 
     const deliveries: DeliveryWithProducer[] = await prisma.delivery.findMany({
       where: { campaignId },

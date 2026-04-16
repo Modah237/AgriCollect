@@ -30,12 +30,7 @@ router.get(
       return
     }
 
-    type DeliveryWithRelations = Prisma.DeliveryGetPayload<{
-      include: {
-        producer: { select: { fullName: true; phoneMomo: true; momoOperator: true } }
-        collector: { select: { fullName: true } }
-      }
-    }>
+    type DeliveryWithRelations = any
 
     const deliveries: DeliveryWithRelations[] = await prisma.delivery.findMany({
       where: { campaignId },

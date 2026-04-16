@@ -162,6 +162,7 @@ router.get(
       _sum: {
         quantityKg: true,
         calculatedAmount: true,
+        netDue: true,
       },
       _count: {
         id: true,
@@ -172,6 +173,7 @@ router.get(
       producersCount,
       totalKg: stats._sum.quantityKg || 0,
       totalAmount: stats._sum.calculatedAmount || 0,
+      totalNetDue: stats._sum.netDue || 0,
       deliveriesCount: stats._count.id || 0,
       campaignName: activeCampaign.name,
     })
