@@ -77,6 +77,10 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok', version: '1.0.0', timestamp: new Date().toISOString() })
 })
 
+app.get('/', (_req, res) => {
+  res.json({ message: 'AgriCollect CM API is running!', status: 'ok' })
+})
+
 // ─── Routes ────────────────────────────────────────────────────────────────────
 
 app.use('/auth', authLimiter, authRoutes)
