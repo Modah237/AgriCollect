@@ -27,5 +27,6 @@ COPY backend/tsconfig.json ./backend/tsconfig.json
 RUN npm run build --workspace=backend
 
 # ─── Étape 5 : Démarrage ─────────────────────────────────────────────────────
+EXPOSE 3001
 
 CMD ["node", "backend/dist/index.js"]
