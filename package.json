@@ -7,6 +7,8 @@
     "web"
   ],
   "scripts": {
+    "start": "node backend/dist/index.js",
+    "build": "npm run build --workspace=backend",
     "backend": "npm run dev --workspace=backend",
     "web": "npm run dev --workspace=web"
   },

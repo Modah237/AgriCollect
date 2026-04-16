@@ -6,8 +6,8 @@
     "context": "."
   },
   "deploy": {
-    "startCommand": "npm start",
+    "startCommand": "node backend/dist/index.js",
     "healthcheckPath": "/health",
-    "healthcheckTimeout": 100
+    "healthcheckTimeout": 300
   }
 }
