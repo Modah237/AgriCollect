@@ -5,7 +5,7 @@ import { prisma } from '../lib/prisma'
 import { authenticate, requireRole } from '../middleware/auth'
 import { validate } from '../middleware/validate'
 import { getPaymentQueue } from '../queues/paymentQueue'
-import { verifyWebhookSignature } from '../services/campay'
+import { verifyWebhookSignature } from '../services/fapshi'
 import { sendPaymentConfirmation, sendPaymentFailure } from '../services/sms'
 
 export const paymentsRouter = Router()
@@ -177,14 +177,14 @@ paymentsRouter.get('/batches/:id', authenticate, async (req: Request, res: Respo
   }
 })
 
-// ─── POST /payments/webhook/campay — Recevoir les confirmations Campay ───────
-// Route PUBLIQUE — authentifiée par signature HMAC
+// ─── POST /payments/webhook/fapshi — Recevoir les confirmations Fapshi ───────
+// Route PUBLIQUE — authentifiée par signature HMAC (si Fapshi le supporte de cette façon)
 
 paymentsRouter.post(
-  '/webhook/campay',
+  '/webhook/fapshi',
   async (req: Request, res: Response) => {
-    // Vérifier la signature HMAC
-    const signature = req.headers['x-campay-signature'] as string || ''
+    // Vérifier la signature webhook
+    const signature = req.headers['x-fapshi-signature'] as string || ''
     const rawBody = JSON.stringify(req.body)
 
     if (!verifyWebhookSignature(rawBody, signature)) {
@@ -192,17 +192,19 @@ paymentsRouter.post(
       return
     }
 
-    const { reference, status, external_reference } = req.body
+    const { transId, reference, status, external_reference, externalId } = req.body
 
-    // external_reference = paymentLine.id (posé lors du collectPayment)
-    if (!external_reference || !status) {
+    // Fapshi might use externalId instead of external_reference
+    const extRef = external_reference || externalId
+    
+    if (!extRef || !status) {
       res.status(400).json({ error: 'Missing fields' })
       return
     }
 
     try {
       const line = await prisma.paymentLine.findUnique({
-        where: { id: external_reference },
+        where: { id: extRef },
         include: { producer: true },
       })
 
@@ -211,12 +213,14 @@ paymentsRouter.post(
         return
       }
 
+      const txRef = transId || reference
+
       if (status === 'SUCCESSFUL') {
         await prisma.paymentLine.update({
           where: { id: line.id },
           data: {
             status: 'CONFIRMED',
-            campayTxRef: reference,
+            fapshiTxRef: txRef,
             confirmedAt: new Date(),
           },
         })
@@ -230,7 +234,7 @@ paymentsRouter.post(
           where: { id: line.id },
           data: {
             status: 'FAILED',
-            campayTxRef: reference,
+            fapshiTxRef: txRef,
             failureReason: req.body.message || 'Payment failed',
           },
         })

@@ -210,6 +210,7 @@ model PaymentBatch {
   totalAmount     Int                // En XAF
   status          PaymentBatchStatus @default(PENDING)
   campayBatchRef  String?            // Référence batch côté Campay
+  fapshiBatchRef  String?            // Référence batch globale ou statut (si applicable pour Fapshi)
   completedAt     DateTime?
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
@@ -229,6 +230,8 @@ model PaymentLine {
   amount          Int               // En XAF
   status          PaymentLineStatus @default(PENDING)
   campayTxRef     String?           @unique // Référence transaction Campay (idempotence webhook)
+  fapshiTxRef     String?           @unique // Référence transaction Fapshi (transId)
+  fapshiStatus    String?           // Statut brut renvoyé par Fapshi (CREATED, SUCCESSFUL, FAILED)
   confirmedAt     DateTime?
   failureReason   String?
   retryCount      Int               @default(0)

@@ -2,7 +2,7 @@ import { Worker, Job } from 'bullmq'
 import { getRedisConnection } from '../queues/paymentQueue'
 const redisConnection = getRedisConnection()
 import { prisma } from '../lib/prisma'
-import { collectPayment, getPaymentStatus } from '../services/campay'
+import { sendPayout, getPayoutStatus } from '../services/fapshi'
 import { sendPaymentConfirmation, sendPaymentFailure } from '../services/sms'
 
 export interface PaymentJobData {
@@ -27,19 +27,20 @@ async function processPaymentBatch(job: Job<PaymentJobData>) {
 
   for (const line of lines) {
     try {
-      // 1. Appeler Campay
-      const result = await collectPayment(
+      // 1. Appeler Fapshi
+      const result = await sendPayout(
         line.producer.phoneMomo,
         Number(line.amount),
         line.id
       )
 
-      // 2. Mettre à jour la ligne en SUBMITTED avec la référence Campay
+      // 2. Mettre à jour la ligne en SUBMITTED avec la référence Fapshi
       await prisma.paymentLine.update({
         where: { id: line.id },
         data: {
           status: 'SUBMITTED',
-          campayTxRef: result.reference,
+          fapshiTxRef: result.transId, // Fapshi renvoie souvent transId dans la doc
+          fapshiStatus: result.status,
         },
       })
 
@@ -57,31 +58,37 @@ async function processPaymentBatch(job: Job<PaymentJobData>) {
           break
         }
 
-        // Sinon, interroger Campay directement
-        const status = await getPaymentStatus(result.reference)
+        // Sinon, interroger Fapshi directement (si nous avons le transId)
+        if (result.transId) {
+          const status = await getPayoutStatus(result.transId)
+          await prisma.paymentLine.update({
+            where: { id: line.id },
+            data: { fapshiStatus: status }
+          })
 
-        if (status.status === 'SUCCESSFUL') {
-          await prisma.paymentLine.update({
-            where: { id: line.id },
-            data: { status: 'CONFIRMED', confirmedAt: new Date() },
-          })
-          await sendPaymentConfirmation(
-            line.producer.phoneMomo,
-            Number(line.amount),
-            line.producer.fullName
-          ).catch(console.error) // Ne pas bloquer si SMS échoue
-          confirmed = true
-        } else if (status.status === 'FAILED') {
-          await prisma.paymentLine.update({
-            where: { id: line.id },
-            data: { status: 'FAILED', failureReason: 'Campay: payment failed' },
-          })
-          await sendPaymentFailure(
-            line.producer.phoneMomo,
-            Number(line.amount),
-            line.producer.fullName
-          ).catch(console.error)
-          confirmed = true
+          if (status === 'SUCCESSFUL') {
+            await prisma.paymentLine.update({
+              where: { id: line.id },
+              data: { status: 'CONFIRMED', confirmedAt: new Date() },
+            })
+            await sendPaymentConfirmation(
+              line.producer.phoneMomo,
+              Number(line.amount),
+              line.producer.fullName
+            ).catch(console.error) // Ne pas bloquer si SMS échoue
+            confirmed = true
+          } else if (status === 'FAILED') {
+            await prisma.paymentLine.update({
+              where: { id: line.id },
+              data: { status: 'FAILED', failureReason: 'Fapshi: payout failed' },
+            })
+            await sendPaymentFailure(
+              line.producer.phoneMomo,
+              Number(line.amount),
+              line.producer.fullName
+            ).catch(console.error)
+            confirmed = true
+          }
         }
       }
 
