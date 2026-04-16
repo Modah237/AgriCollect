@@ -5,11 +5,12 @@ RUN apt-get update && apt-get install -y openssl libssl-dev && rm -rf /var/lib/a
 
 WORKDIR /app
 
-# ─── Étape 1 : Copie des manifestes de dépendances uniquement ────────────────
-# On copie d'abord UNIQUEMENT les package.json pour profiter du cache Docker.
+# ─── Étape 1 : Copie des manifestes et du schéma Prisma ─────────────────────
+# Le schéma est requis avant npm install à cause du script postinstall
 COPY package*.json ./
 COPY .npmrc ./
 COPY backend/package*.json ./backend/
+COPY backend/prisma ./backend/prisma/
 
 # ─── Étape 2 : Installation des dépendances (backend seulement) ──────────────
 # On ignore les workspaces web pour ne pas installer Next.js dans l'image backend
