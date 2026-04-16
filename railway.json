@@ -8,6 +8,6 @@
   "deploy": {
     "startCommand": "node backend/dist/index.js",
     "healthcheckPath": "/health",
-    "healthcheckTimeout": 300
+    "healthcheckTimeout": 30
   }
 }
