@@ -7,8 +7,8 @@ RUN apt-get update && apt-get install -y openssl libssl-dev && rm -rf /var/lib/a
 # Dossier de travail
 WORKDIR /app
 
-# Copie des fichiers de dépendances
-COPY package*.json ./
+# Copie des fichiers de dépendances et configuration npm
+COPY package*.json .npmrc ./
 
 # Installation des dépendances (y compris dev pour le build tsc)
 RUN npm install
