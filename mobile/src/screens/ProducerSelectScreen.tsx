@@ -8,7 +8,10 @@ import {
   StyleSheet,
   SafeAreaView,
   ActivityIndicator,
+  StatusBar,
 } from 'react-native'
+import { LinearGradient } from 'expo-linear-gradient'
+import { Ionicons } from '@expo/vector-icons'
 import { database, Producer } from '../db/database'
 
 interface ProducerSelectScreenProps {
@@ -31,7 +34,6 @@ export default function ProducerSelectScreen({ onSelect, onBack }: ProducerSelec
     setLoading(false)
   }
 
-  // Filtrage local — recherche phonétique simplifiée (insensible aux accents)
   const filtered = producers.filter((p) => {
     if (!search) return true
     const normalize = (s: string) =>
@@ -40,53 +42,71 @@ export default function ProducerSelectScreen({ onSelect, onBack }: ProducerSelec
   })
 
   function renderItem({ item }: { item: Producer }) {
+    const initials = item.fullName.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase()
+
     return (
       <TouchableOpacity
-        style={styles.item}
+        style={styles.card}
         onPress={() => onSelect({ id: item.serverId, fullName: item.fullName, phoneMomo: item.phoneMomo })}
         activeOpacity={0.7}
       >
-        {/* Avatar initiales */}
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>
-            {item.fullName.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase()}
-          </Text>
+        <LinearGradient
+          colors={['#2D6A27', '#1C3D1A']}
+          style={styles.avatar}
+        >
+          <Text style={styles.avatarText}>{initials}</Text>
+        </LinearGradient>
+
+        <View style={styles.cardInfo}>
+          <Text style={styles.cardName}>{item.fullName}</Text>
+          <View style={styles.cardDetail}>
+            <Ionicons name="wallet-outline" size={14} color="#5A7A55" />
+            <Text style={styles.cardPhone}> {item.momoOperator} · {item.phoneMomo}</Text>
+          </View>
         </View>
-        <View style={styles.itemInfo}>
-          <Text style={styles.itemName}>{item.fullName}</Text>
-          <Text style={styles.itemPhone}>{item.momoOperator} · {item.phoneMomo}</Text>
-        </View>
+        <Ionicons name="chevron-forward" size={20} color="#C5D9C2" />
       </TouchableOpacity>
     )
   }
 
   return (
     <SafeAreaView style={styles.safe}>
-      {/* En-tête */}
+      <StatusBar barStyle="dark-content" />
+      {/* Header Premium */}
       <View style={styles.header}>
         <TouchableOpacity onPress={onBack} style={styles.backBtn}>
-          <Text style={styles.backText}>← Retour</Text>
+          <Ionicons name="chevron-back" size={24} color="#2D6A27" />
         </TouchableOpacity>
         <Text style={styles.title}>Choisir un producteur</Text>
-        <Text style={styles.count}>{filtered.length} membre{filtered.length > 1 ? 's' : ''}</Text>
+        <View style={styles.badge}>
+          <Text style={styles.badgeText}>{filtered.length} MEMBRES</Text>
+        </View>
       </View>
 
-      {/* Barre de recherche */}
+      {/* Barre de recherche avec icône */}
       <View style={styles.searchContainer}>
-        <TextInput
-          style={styles.search}
-          placeholder="Rechercher un nom..."
-          value={search}
-          onChangeText={setSearch}
-          placeholderTextColor="#9CAF99"
-          autoFocus
-        />
+        <View style={styles.searchBox}>
+          <Ionicons name="search-outline" size={20} color="#9CAF99" style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Rechercher un nom..."
+            value={search}
+            onChangeText={setSearch}
+            placeholderTextColor="#9CAF99"
+          />
+          {search.length > 0 && (
+            <TouchableOpacity onPress={() => setSearch('')}>
+              <Ionicons name="close-circle" size={20} color="#C5D9C2" />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       {loading ? (
         <ActivityIndicator size="large" color="#2D6A27" style={{ marginTop: 40 }} />
       ) : filtered.length === 0 ? (
         <View style={styles.empty}>
+          <Ionicons name="people-outline" size={64} color="#C5D9C2" />
           <Text style={styles.emptyText}>
             {search
               ? `Aucun producteur trouvé pour "${search}"`
@@ -98,8 +118,8 @@ export default function ProducerSelectScreen({ onSelect, onBack }: ProducerSelec
           data={filtered}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
-          ItemSeparatorComponent={() => <View style={styles.separator} />}
           contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
         />
       )}
     </SafeAreaView>
@@ -107,42 +127,77 @@ export default function ProducerSelectScreen({ onSelect, onBack }: ProducerSelec
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F5F0E8' },
-  header: { padding: 16, paddingBottom: 8 },
-  backBtn: { marginBottom: 8 },
-  backText: { color: '#2D6A27', fontSize: 16 },
-  title: { fontSize: 22, fontWeight: '700', color: '#1C3D1A' },
-  count: { fontSize: 14, color: '#5A7A55', marginTop: 4 },
-  searchContainer: { paddingHorizontal: 16, paddingBottom: 8 },
-  search: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 14,
-    fontSize: 16,
-    color: '#1C3D1A',
-    borderWidth: 1,
-    borderColor: '#C5D9C2',
+  safe: { flex: 1, backgroundColor: '#F8F6F2' },
+  header: { 
+    padding: 16, 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between' 
   },
-  list: { paddingHorizontal: 16, paddingBottom: 24 },
-  item: {
+  backBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  title: { fontSize: 20, fontWeight: '800', color: '#1C3D1A' },
+  badge: {
+    backgroundColor: '#E0EBD9',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  badgeText: { fontSize: 10, fontWeight: '700', color: '#2D6A27' },
+  searchContainer: { paddingHorizontal: 16, paddingBottom: 16 },
+  searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    height: 54,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+  },
+  searchIcon: { marginRight: 10 },
+  searchInput: { flex: 1, fontSize: 16, color: '#1C3D1A', fontWeight: '500' },
+  list: { paddingHorizontal: 16, paddingBottom: 24 },
+  card: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 12,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
   },
   avatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: '#2D6A27',
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 14,
   },
-  avatarText: { color: '#FFFFFF', fontSize: 18, fontWeight: '700' },
-  itemInfo: { flex: 1 },
-  itemName: { fontSize: 17, fontWeight: '600', color: '#1C3D1A' },
-  itemPhone: { fontSize: 13, color: '#5A7A55', marginTop: 3 },
-  separator: { height: 1, backgroundColor: '#E0EBD9' },
+  avatarText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
+  cardInfo: { flex: 1 },
+  cardName: { fontSize: 17, fontWeight: '700', color: '#1C3D1A' },
+  cardDetail: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
+  cardPhone: { fontSize: 13, color: '#5A7A55' },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
-  emptyText: { fontSize: 15, color: '#5A7A55', textAlign: 'center', lineHeight: 24 },
+  emptyText: { fontSize: 15, color: '#5A7A55', textAlign: 'center', lineHeight: 24, marginTop: 16 },
 })

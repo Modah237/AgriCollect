@@ -14,6 +14,8 @@ export class Delivery extends Model {
   @field('notes') notes!: string | null
   @field('price_per_kg') pricePerKg!: number
   @field('calculated_amount') calculatedAmount!: number
+  @field('advance_deducted') advanceDeducted!: number | null
+  @field('net_due') netDue!: number | null
   @date('created_offline_at') createdOfflineAt!: Date
   @field('is_synced') isSynced!: boolean
   @field('sync_error') syncError!: string | null

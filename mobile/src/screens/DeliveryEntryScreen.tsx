@@ -8,8 +8,15 @@ import {
   TextInput,
   Alert,
   ScrollView,
+  Image,
+  Dimensions,
+  StatusBar,
 } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
+import * as ImagePicker from 'expo-image-picker'
 import { database, Delivery, PriceRule } from '../db/database'
+
+const { width } = Dimensions.get('window')
 
 interface Producer {
   id: string
@@ -25,9 +32,9 @@ interface DeliveryEntryScreenProps {
 }
 
 const QUALITY_GRADES = [
-  { value: 'A', label: 'A — Qualité supérieure', color: '#2D6A27' },
-  { value: 'B', label: 'B — Qualité standard', color: '#B8860B' },
-  { value: 'C', label: 'C — Déclassé', color: '#8B3A3A' },
+  { value: 'A', label: 'Grade A', sub: 'Qualité Supérieure', color: '#2D6A27', icon: 'ribbon-outline' },
+  { value: 'B', label: 'Grade B', sub: 'Qualité Standard', color: '#B8860B', icon: 'medal-outline' },
+  { value: 'C', label: 'Grade C', sub: 'Déclassé', color: '#8B3A3A', icon: 'alert-circle-outline' },
 ]
 
 export default function DeliveryEntryScreen({
@@ -41,6 +48,7 @@ export default function DeliveryEntryScreen({
   const [culture, setCulture] = useState('')
   const [cultures, setCultures] = useState<string[]>([])
   const [pricePerKg, setPricePerKg] = useState<number | null>(null)
+  const [photo, setPhoto] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -49,28 +57,19 @@ export default function DeliveryEntryScreen({
 
   async function loadCultures() {
     const rules = await database.get<PriceRule>('price_rules').query().fetch()
-    const activeCampaignRules = rules.filter(
-      (r) => r.campaignId === campaignId && r.qualityGrade === quality
-    )
-    const uniqueCultures = [...new Set(activeCampaignRules.map((r) => r.culture))]
+    const activeRules = rules.filter(r => r.campaignId === campaignId && r.qualityGrade === quality)
+    const uniqueCultures = [...new Set(activeRules.map(r => r.culture))]
     setCultures(uniqueCultures)
 
-    // Sélectionner automatiquement la première culture si pas encore choisie
-    if (!culture && uniqueCultures.length > 0) {
-      setCulture(uniqueCultures[0])
-    }
-
-    // Mettre à jour le prix selon la culture et qualité sélectionnées
-    const rule = activeCampaignRules.find((r) => r.culture === (culture || uniqueCultures[0]))
+    if (!culture && uniqueCultures.length > 0) setCulture(uniqueCultures[0])
+    const rule = activeRules.find(r => r.culture === (culture || uniqueCultures[0]))
     setPricePerKg(rule?.pricePerKg ?? null)
   }
 
   useEffect(() => {
     if (culture) {
-      database.get<PriceRule>('price_rules').query().fetch().then((rules) => {
-        const rule = rules.find(
-          (r) => r.campaignId === campaignId && r.culture === culture && r.qualityGrade === quality
-        )
+      database.get<PriceRule>('price_rules').query().fetch().then(rules => {
+        const rule = rules.find(r => r.campaignId === campaignId && r.culture === culture && r.qualityGrade === quality)
         setPricePerKg(rule?.pricePerKg ?? null)
       })
     }
@@ -79,23 +78,23 @@ export default function DeliveryEntryScreen({
   const qty = parseFloat(quantity) || 0
   const total = pricePerKg ? Math.round(qty * pricePerKg) : 0
 
+  async function takePhoto() {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync()
+    if (status !== 'granted') {
+      Alert.alert('Permission refusée', 'L\'accès à la caméra est requis.')
+      return
+    }
+    const result = await ImagePicker.launchCameraAsync({ quality: 0.5, allowsEditing: true })
+    if (!result.canceled) setPhoto(result.assets[0].uri)
+  }
+
   async function handleConfirm() {
     if (!quantity || qty <= 0) {
       Alert.alert('Saisie invalide', 'Entrez une quantité valide.')
       return
     }
-    if (!culture) {
-      Alert.alert('Saisie invalide', 'Sélectionnez une culture.')
-      return
-    }
-    if (!pricePerKg) {
-      Alert.alert('Prix manquant', 'Aucun prix défini pour cette culture/qualité.')
-      return
-    }
-
     setSaving(true)
     try {
-      // Générer un UUID v4 offline unique
       const offlineUuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
         const r = (Math.random() * 16) | 0
         return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16)
@@ -111,19 +110,15 @@ export default function DeliveryEntryScreen({
           record.qualityGrade = quality
           record.pricePerKg = pricePerKg!
           record.calculatedAmount = total
+          record.photoUrl = photo
           record.createdOfflineAt = new Date()
           record.isSynced = false
-          record.syncError = null
         })
       })
 
-      Alert.alert(
-        'Livraison enregistrée ✓',
-        `${producer.fullName}\n${qty} kg de ${culture} (Grade ${quality})\n= ${total.toLocaleString('fr-FR')} XAF`,
-        [{ text: 'OK', onPress: onConfirm }]
-      )
+      Alert.alert('Succès ✓', `Pesée enregistrée pour ${producer.fullName}`, [{ text: 'OK', onPress: onConfirm }])
     } catch (err) {
-      Alert.alert('Erreur', 'Impossible d\'enregistrer la livraison.')
+      Alert.alert('Erreur', 'Impossible d\'enregistrer.')
     } finally {
       setSaving(false)
     }
@@ -131,90 +126,71 @@ export default function DeliveryEntryScreen({
 
   return (
     <SafeAreaView style={styles.safe}>
-      <ScrollView contentContainerStyle={styles.container}>
-        {/* En-tête producteur */}
+      <StatusBar barStyle="dark-content" />
+      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+        {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={onBack} style={styles.backBtn}>
-            <Text style={styles.backText}>← Retour</Text>
+            <Ionicons name="chevron-back" size={24} color="#2D6A27" />
           </TouchableOpacity>
-          <View style={styles.producerCard}>
+          <View style={styles.badge}><Text style={styles.badgeText}>NOUVELLE PESÉE</Text></View>
+        </View>
+
+        {/* Info Producteur */}
+        <View style={styles.producerCard}>
+          <View style={styles.producerIcon}><Ionicons name="person" size={24} color="#FFFFFF" /></View>
+          <View>
             <Text style={styles.producerName}>{producer.fullName}</Text>
             <Text style={styles.producerPhone}>{producer.phoneMomo}</Text>
           </View>
         </View>
 
-        {/* Sélection culture */}
-        {cultures.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.label}>Culture</Text>
-            <View style={styles.pills}>
-              {cultures.map((c) => (
-                <TouchableOpacity
-                  key={c}
-                  style={[styles.pill, culture === c && styles.pillSelected]}
-                  onPress={() => setCulture(c)}
-                >
-                  <Text style={[styles.pillText, culture === c && styles.pillTextSelected]}>
-                    {c.charAt(0).toUpperCase() + c.slice(1)}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+        {/* Sélection Culture */}
+        <Text style={styles.sectionTitle}>1. Choisir le produit</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.cultureScroll}>
+          {cultures.map(c => (
+            <TouchableOpacity key={c} onPress={() => setCulture(c)} style={[styles.culturePill, culture === c && styles.culturePillActive]}>
+              <Text style={[styles.cultureText, culture === c && styles.cultureTextActive]}>{c.toUpperCase()}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
+        {/* Sélection Qualité */}
+        <Text style={styles.sectionTitle}>2. Qualité du lot</Text>
+        <View style={styles.qualityContainer}>
+          {QUALITY_GRADES.map(g => (
+            <TouchableOpacity key={g.value} onPress={() => setQuality(g.value)} 
+              style={[styles.qualityCard, quality === g.value && { borderColor: g.color, backgroundColor: g.color + '15' }]}>
+              <Ionicons name={g.icon as any} size={24} color={quality === g.value ? g.color : '#9CAF99'} />
+              <View style={{ marginLeft: 12 }}>
+                <Text style={[styles.qualityLabel, quality === g.value && { color: g.color }]}>{g.label}</Text>
+                <Text style={styles.qualitySub}>{g.sub}</Text>
+              </View>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* Saisie Poids */}
+        <Text style={styles.sectionTitle}>3. Pesage (kg)</Text>
+        <View style={styles.weightBox}>
+          <TextInput style={styles.weightInput} value={quantity} onChangeText={setQuantity} keyboardType="decimal-pad" placeholder="0.0" />
+          <TouchableOpacity onPress={takePhoto} style={styles.photoBtn}>
+            {photo ? <Image source={{ uri: photo }} style={styles.photoPreview} /> : <Ionicons name="camera" size={30} color="#2D6A27" />}
+          </TouchableOpacity>
+        </View>
+
+        {/* Récapitulatif Financer */}
+        {total > 0 && (
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryTitle}>MONTANT TOTAL</Text>
+            <Text style={styles.summaryValue}>{total.toLocaleString('fr-FR')} XAF</Text>
+            <Text style={styles.summaryDetail}>{qty} kg × {pricePerKg} XAF/kg</Text>
           </View>
         )}
 
-        {/* Sélection qualité */}
-        <View style={styles.section}>
-          <Text style={styles.label}>Qualité</Text>
-          <View style={styles.qualityOptions}>
-            {QUALITY_GRADES.map((g) => (
-              <TouchableOpacity
-                key={g.value}
-                style={[styles.qualityBtn, quality === g.value && { borderColor: g.color, backgroundColor: g.color + '15' }]}
-                onPress={() => setQuality(g.value)}
-              >
-                <Text style={[styles.qualityBtnText, quality === g.value && { color: g.color, fontWeight: '700' }]}>
-                  {g.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        {/* Quantité */}
-        <View style={styles.section}>
-          <Text style={styles.label}>Quantité (kg)</Text>
-          <TextInput
-            style={styles.quantityInput}
-            value={quantity}
-            onChangeText={setQuantity}
-            keyboardType="decimal-pad"
-            placeholder="0.0"
-            placeholderTextColor="#9CAF99"
-          />
-        </View>
-
-        {/* Calcul automatique */}
-        {pricePerKg && qty > 0 && (
-          <View style={styles.totalCard}>
-            <Text style={styles.totalLabel}>Montant calculé</Text>
-            <Text style={styles.totalAmount}>{total.toLocaleString('fr-FR')} XAF</Text>
-            <Text style={styles.totalDetail}>
-              {qty} kg × {pricePerKg.toLocaleString('fr-FR')} XAF/kg
-            </Text>
-          </View>
-        )}
-
-        {/* Bouton confirmer */}
-        <TouchableOpacity
-          style={[styles.confirmBtn, (saving || qty === 0) && styles.confirmBtnDisabled]}
-          onPress={handleConfirm}
-          disabled={saving || qty === 0}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.confirmBtnText}>
-            {saving ? 'Enregistrement...' : '✓  Confirmer la livraison'}
-          </Text>
+        {/* Bouton Validation */}
+        <TouchableOpacity style={[styles.confirmBtn, (saving || qty <= 0) && { opacity: 0.5 }]} onPress={handleConfirm} disabled={saving || qty <= 0}>
+          <Text style={styles.confirmText}>{saving ? 'ENREGISTREMENT...' : 'CONFIRMER LA PESÉE'}</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -222,70 +198,34 @@ export default function DeliveryEntryScreen({
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F5F0E8' },
-  container: { padding: 20, paddingBottom: 40 },
-  header: { marginBottom: 20 },
-  backBtn: { marginBottom: 12 },
-  backText: { color: '#2D6A27', fontSize: 16 },
-  producerCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    borderLeftWidth: 4,
-    borderLeftColor: '#2D6A27',
-  },
-  producerName: { fontSize: 20, fontWeight: '700', color: '#1C3D1A' },
-  producerPhone: { fontSize: 14, color: '#5A7A55', marginTop: 4 },
-  section: { marginBottom: 24 },
-  label: { fontSize: 14, fontWeight: '600', color: '#5A7A55', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.8 },
-  pills: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  pill: {
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 20,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: '#C5D9C2',
-  },
-  pillSelected: { backgroundColor: '#2D6A27', borderColor: '#2D6A27' },
-  pillText: { fontSize: 15, color: '#5A7A55', fontWeight: '500' },
-  pillTextSelected: { color: '#FFFFFF', fontWeight: '700' },
-  qualityOptions: { gap: 8 },
-  qualityBtn: {
-    padding: 14,
-    borderRadius: 12,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: '#C5D9C2',
-  },
-  qualityBtnText: { fontSize: 15, color: '#5A7A55' },
-  quantityInput: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 18,
-    fontSize: 32,
-    fontWeight: '700',
-    color: '#1C3D1A',
-    textAlign: 'center',
-    borderWidth: 1.5,
-    borderColor: '#C5D9C2',
-  },
-  totalCard: {
-    backgroundColor: '#1C3D1A',
-    borderRadius: 16,
-    padding: 20,
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  totalLabel: { color: '#9CAF99', fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.8 },
-  totalAmount: { color: '#FFFFFF', fontSize: 36, fontWeight: '800', marginVertical: 4 },
-  totalDetail: { color: '#9CAF99', fontSize: 13 },
-  confirmBtn: {
-    backgroundColor: '#2D6A27',
-    borderRadius: 16,
-    padding: 20,
-    alignItems: 'center',
-  },
-  confirmBtnDisabled: { backgroundColor: '#9CAF99' },
-  confirmBtnText: { color: '#FFFFFF', fontSize: 18, fontWeight: '700' },
+  safe: { flex: 1, backgroundColor: '#F8F6F2' },
+  container: { padding: 20 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  backBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', elevation: 2 },
+  badge: { backgroundColor: '#FFD700', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
+  badgeText: { fontSize: 10, fontWeight: '900', color: '#1C3D1A' },
+  producerCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', padding: 16, borderRadius: 16, marginBottom: 24, elevation: 1 },
+  producerIcon: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#2D6A27', alignItems: 'center', justifyContent: 'center', marginRight: 16 },
+  producerName: { fontSize: 18, fontWeight: '800', color: '#1C3D1A' },
+  producerPhone: { fontSize: 13, color: '#5A7A55' },
+  sectionTitle: { fontSize: 12, fontWeight: '800', color: '#9CAF99', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 },
+  cultureScroll: { marginBottom: 24 },
+  culturePill: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20, backgroundColor: '#FFFFFF', marginRight: 8, borderWidth: 1, borderColor: '#E0EBD9' },
+  culturePillActive: { backgroundColor: '#2D6A27', borderColor: '#2D6A27' },
+  cultureText: { fontSize: 14, fontWeight: '700', color: '#5A7A55' },
+  cultureTextActive: { color: '#FFFFFF' },
+  qualityContainer: { gap: 10, marginBottom: 24 },
+  qualityCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', padding: 14, borderRadius: 12, borderWidth: 1.5, borderColor: '#E0EBD9' },
+  qualityLabel: { fontSize: 15, fontWeight: '700', color: '#1C3D1A' },
+  qualitySub: { fontSize: 12, color: '#9CAF99' },
+  weightBox: { flexDirection: 'row', gap: 10, marginBottom: 30 },
+  weightInput: { flex: 1, backgroundColor: '#FFFFFF', borderRadius: 16, padding: 20, fontSize: 32, fontWeight: '800', color: '#1C3D1A', textAlign: 'center', elevation: 2 },
+  photoBtn: { width: 80, height: 80, borderRadius: 16, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', borderStyle: 'dashed', borderWidth: 2, borderColor: '#C5D9C2' },
+  photoPreview: { width: 76, height: 76, borderRadius: 14 },
+  summaryCard: { backgroundColor: '#1C3D1A', padding: 24, borderRadius: 20, alignItems: 'center', marginBottom: 20 },
+  summaryTitle: { fontSize: 11, fontWeight: '700', color: '#9CAF99', letterSpacing: 2 },
+  summaryValue: { fontSize: 34, fontWeight: '900', color: '#FFFFFF', marginVertical: 4 },
+  summaryDetail: { fontSize: 13, color: '#9CAF99' },
+  confirmBtn: { backgroundColor: '#2D6A27', padding: 22, borderRadius: 16, alignItems: 'center', elevation: 4 },
+  confirmText: { color: '#FFFFFF', fontSize: 16, fontWeight: '900', letterSpacing: 1 },
 })

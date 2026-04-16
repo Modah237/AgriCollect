@@ -2,7 +2,7 @@ import { appSchema, tableSchema } from '@nozbe/watermelondb'
 
 // Schéma WatermelonDB — données offline du collecteur
 export const schema = appSchema({
-  version: 1,
+  version: 2,
   tables: [
     // Producteurs du GIC (synchronisés depuis le serveur)
     tableSchema({
@@ -46,6 +46,8 @@ export const schema = appSchema({
         { name: 'notes', type: 'string', isOptional: true },
         { name: 'price_per_kg', type: 'number' },       // Snapshot du prix au moment de la saisie
         { name: 'calculated_amount', type: 'number' },  // quantityKg × pricePerKg
+        { name: 'advance_deducted', type: 'number', isOptional: true }, 
+        { name: 'net_due', type: 'number', isOptional: true },
         { name: 'created_offline_at', type: 'number' }, // timestamp de saisie
         { name: 'is_synced', type: 'boolean' },         // false = en attente de sync
         { name: 'sync_error', type: 'string', isOptional: true },

@@ -125,6 +125,60 @@ router.get(
 )
 
 /**
+ * GET /gic/:gicId/stats
+ * Statistiques agrégées pour le dashboard (Volume total, Montant total, etc.)
+ */
+router.get(
+  '/:gicId/stats',
+  authenticate,
+  requireSameGic,
+  async (req: Request, res: Response) => {
+    const gicId = String(req.params.gicId)
+
+    // 1. Trouver la campagne active
+    const activeCampaign = await prisma.campaign.findFirst({
+      where: { gicId, status: 'ACTIVE' },
+    })
+
+    // 2. Compter les producteurs actifs
+    const producersCount = await prisma.producer.count({
+      where: { gicId, isActive: true },
+    })
+
+    if (!activeCampaign) {
+      res.json({
+        producersCount,
+        totalKg: 0,
+        totalAmount: 0,
+        deliveriesCount: 0,
+        campaignName: 'Aucune campagne active',
+      })
+      return
+    }
+
+    // 3. Agrégations sur les livraisons de la campagne active
+    const stats = await prisma.delivery.aggregate({
+      where: { campaignId: activeCampaign.id },
+      _sum: {
+        quantityKg: true,
+        calculatedAmount: true,
+      },
+      _count: {
+        id: true,
+      },
+    })
+
+    res.json({
+      producersCount,
+      totalKg: stats._sum.quantityKg || 0,
+      totalAmount: stats._sum.calculatedAmount || 0,
+      deliveriesCount: stats._count.id || 0,
+      campaignName: activeCampaign.name,
+    })
+  }
+)
+
+/**
  * GET /gic/:gicId/producers
  * Liste des producteurs (utilisé pour sync mobile)
  */

@@ -123,7 +123,13 @@ export async function syncDeliveries(deliveries: DeliveryPayload[]) {
     created: number
     duplicates: number
     errors: number
-    results: Array<{ offlineUuid: string; status: 'created' | 'duplicate' | 'error'; error?: string }>
+    results: Array<{ 
+      offlineUuid: string; 
+      status: 'created' | 'duplicate' | 'error'; 
+      advanceDeducted?: number;
+      netDue?: number;
+      error?: string;
+    }>
   }>('/deliveries/sync', {
     method: 'POST',
     body: JSON.stringify({ deliveries }),

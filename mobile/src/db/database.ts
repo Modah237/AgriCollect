@@ -1,9 +1,6 @@
 import { Database } from '@nozbe/watermelondb'
 import { Platform } from 'react-native'
-import { schema } from './schema'
-import { Producer } from './models/Producer'
-import { PriceRule } from './models/PriceRule'
-import { Delivery } from './models/Delivery'
+import migrations from './migrations'
 
 let adapter: any
 
@@ -12,6 +9,7 @@ if (Platform.OS === 'web') {
   const LokiJSAdapter = require('@nozbe/watermelondb/adapters/lokijs').default
   adapter = new LokiJSAdapter({
     schema,
+    migrations,                    // Ajout des migrations pour le web
     useWebWorker: false,           // obligatoire dans Expo web (pas de Worker API)
     useIncrementalIndexedDB: true, // persistance entre les rechargements
   })
@@ -20,6 +18,7 @@ if (Platform.OS === 'web') {
   const SQLiteAdapter = require('@nozbe/watermelondb/adapters/sqlite').default
   adapter = new SQLiteAdapter({
     schema,
+    migrations,                    // Ajout des migrations pour le mobile
     dbName: 'agricollect',
     onSetUpError: (error: any) => {
       console.error('WatermelonDB (SQLite) setup error:', error)

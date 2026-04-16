@@ -7,9 +7,15 @@ import {
   SafeAreaView,
   ActivityIndicator,
   Alert,
+  ScrollView,
+  StatusBar,
 } from 'react-native'
+import { LinearGradient } from 'expo-linear-gradient'
+import { Ionicons } from '@expo/vector-icons'
 import { fullSync, countPendingDeliveries } from '../sync/syncEngine'
 import { getUser } from '../stores/authStore'
+import { database, Delivery } from '../db/database'
+import { Q } from '@nozbe/watermelondb'
 
 interface SyncScreenProps {
   gicId: string
@@ -22,6 +28,7 @@ export default function SyncScreen({ gicId, onNewDelivery, onLogout }: SyncScree
   const [pending, setPending] = useState(0)
   const [lastSync, setLastSync] = useState<Date | null>(null)
   const [userName, setUserName] = useState('')
+  const [recentDeliveries, setRecentDeliveries] = useState<any[]>([])
 
   useEffect(() => {
     refresh()
@@ -31,6 +38,13 @@ export default function SyncScreen({ gicId, onNewDelivery, onLogout }: SyncScree
   async function refresh() {
     const count = await countPendingDeliveries()
     setPending(count)
+    
+    // Charger les 3 dernières livraisons pour l'affichage 'Activité'
+    const recent = await database.get<Delivery>('deliveries')
+      .query(Q.sortBy('created_offline_at', Q.desc), Q.take(3))
+      .fetch()
+    
+    setRecentDeliveries(recent)
   }
 
   async function handleSync() {
@@ -40,18 +54,14 @@ export default function SyncScreen({ gicId, onNewDelivery, onLogout }: SyncScree
       setLastSync(new Date())
       await refresh()
       Alert.alert(
-        'Synchronisation réussie',
-        result.pushed > 0
-          ? `${result.pushed} livraison(s) envoyée(s) au serveur.`
-          : 'Tout est à jour.'
+        'Synchronisation',
+        result.pushed > 0 ? `${result.pushed} livraisons envoyées.` : 'Tout est à jour !'
       )
     } catch (err: any) {
       if (err.message === 'SESSION_EXPIRED') {
-        Alert.alert('Session expirée', 'Veuillez vous reconnecter.', [
-          { text: 'OK', onPress: onLogout },
-        ])
+        Alert.alert('Session expirée', 'Reconnectez-vous.', [{ text: 'OK', onPress: onLogout }])
       } else {
-        Alert.alert('Erreur réseau', 'Synchronisation impossible. Les livraisons sont sauvegardées en local.')
+        Alert.alert('Erreur', 'Impossible de joindre le serveur.')
       }
     } finally {
       setSyncing(false)
@@ -60,97 +70,159 @@ export default function SyncScreen({ gicId, onNewDelivery, onLogout }: SyncScree
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.container}>
-        {/* En-tête */}
+      <StatusBar barStyle="dark-content" />
+      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+        {/* Header */}
         <View style={styles.header}>
           <Text style={styles.logo}>🌿 AgriCollect</Text>
-          <TouchableOpacity onPress={onLogout}>
-            <Text style={styles.logout}>Déconnexion</Text>
+          <TouchableOpacity onPress={onLogout} style={styles.logoutBtn}>
+            <Ionicons name="log-out-outline" size={20} color="#8B3A3A" />
           </TouchableOpacity>
         </View>
 
         <Text style={styles.welcome}>Bonjour, {userName.split(' ')[0]} 👋</Text>
 
-        {/* Statut sync */}
-        <View style={styles.statusCard}>
-          <View style={[styles.statusDot, pending > 0 ? styles.dotPending : styles.dotOk]} />
-          <View>
-            <Text style={styles.statusTitle}>
-              {pending > 0 ? `${pending} livraison(s) en attente` : 'Tout est synchronisé'}
-            </Text>
-            {lastSync && (
-              <Text style={styles.statusSub}>
-                Dernière sync : {lastSync.toLocaleTimeString('fr-FR')}
-              </Text>
-            )}
+        {/* Dashboard Status */}
+        <LinearGradient
+          colors={pending > 0 ? ['#F2994A', '#F2C94C'] : ['#2D6A27', '#1C3D1A']}
+          style={styles.statusCard}
+        >
+          <View style={styles.statusIcon}>
+            <Ionicons 
+              name={pending > 0 ? "cloud-upload-outline" : "cloud-done-outline"} 
+              size={32} 
+              color="#FFFFFF" 
+            />
           </View>
-        </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.statusTitle}>
+              {pending > 0 ? `${pending} pesées à envoyer` : 'Tout est sécurisé'}
+            </Text>
+            <Text style={styles.statusSub}>
+              {lastSync 
+                ? `Dernière sync : ${lastSync.toLocaleTimeString('fr-FR')} ` 
+                : 'En attente de synchronisation'}
+            </Text>
+          </View>
+        </LinearGradient>
 
-        {/* Actions principales */}
-        <TouchableOpacity style={styles.mainBtn} onPress={onNewDelivery} activeOpacity={0.85}>
-          <Text style={styles.mainBtnIcon}>📦</Text>
-          <Text style={styles.mainBtnText}>Enregistrer une livraison</Text>
-          <Text style={styles.mainBtnSub}>3 étapes · Fonctionne hors ligne</Text>
+        {/* Action Button */}
+        <TouchableOpacity style={styles.mainBtn} onPress={onNewDelivery} activeOpacity={0.9}>
+          <View style={styles.mainBtnIcon}>
+            <Ionicons name="add-circle" size={40} color="#FFFFFF" />
+          </View>
+          <View>
+            <Text style={styles.mainBtnText}>Nouvelle Pesée</Text>
+            <Text style={styles.mainBtnSub}>Enregistrer une livraison</Text>
+          </View>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.syncBtn, syncing && styles.syncBtnDisabled]}
+        {/* Sync Button */}
+        <TouchableOpacity 
+          style={[styles.syncBtn, syncing && styles.syncBtnDisabled]} 
           onPress={handleSync}
           disabled={syncing}
-          activeOpacity={0.8}
         >
           {syncing ? (
             <ActivityIndicator color="#2D6A27" />
           ) : (
-            <Text style={styles.syncBtnText}>
-              🔄  Synchroniser{pending > 0 ? ` (${pending})` : ''}
-            </Text>
+            <View style={styles.syncContent}>
+              <Ionicons name="refresh-outline" size={20} color="#2D6A27" />
+              <Text style={styles.syncBtnText}>Synchroniser tout</Text>
+            </View>
           )}
         </TouchableOpacity>
-      </View>
+
+        {/* Activité récente */}
+        <View style={styles.activitySection}>
+          <Text style={styles.sectionTitle}>ACTIVITÉ RÉCENTE</Text>
+          {recentDeliveries.length === 0 ? (
+            <Text style={styles.emptyText}>Aucune livraison pour le moment.</Text>
+          ) : (
+            recentDeliveries.map((d) => (
+              <View key={d.id} style={styles.activityCard}>
+                <View style={styles.activityIcon}>
+                  <Ionicons name="cube-outline" size={18} color="#2D6A27" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.activityText}>{d.quantityKg} kg de {d.culture}</Text>
+                  <Text style={styles.activityDate}>
+                    {new Date(d.createdOfflineAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                  </Text>
+                </View>
+                {d.isSynced ? (
+                  <Ionicons name="checkmark-circle" size={20} color="#2D6A27" />
+                ) : (
+                  <Ionicons name="time-outline" size={20} color="#F2994A" />
+                )}
+              </View>
+            ))
+          )}
+        </View>
+      </ScrollView>
     </SafeAreaView>
   )
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F5F0E8' },
-  container: { flex: 1, padding: 24 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
-  logo: { fontSize: 20, fontWeight: '800', color: '#1C3D1A' },
-  logout: { color: '#8B3A3A', fontSize: 14 },
-  welcome: { fontSize: 26, fontWeight: '700', color: '#1C3D1A', marginBottom: 20 },
+  safe: { flex: 1, backgroundColor: '#F8F6F2' },
+  container: { flex: 1, padding: 20 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  logo: { fontSize: 18, fontWeight: '900', color: '#1C3D1A', letterSpacing: 0.5 },
+  logoutBtn: { padding: 8, backgroundColor: '#FFFFFF', borderRadius: 10, elevation: 1 },
+  welcome: { fontSize: 28, fontWeight: '800', color: '#1C3D1A', marginBottom: 24 },
   statusCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 32,
-    gap: 14,
+    borderRadius: 20,
+    padding: 24,
+    marginBottom: 24,
+    elevation: 4,
+    shadowColor: '#2D6A27',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
   },
-  statusDot: { width: 14, height: 14, borderRadius: 7 },
-  dotPending: { backgroundColor: '#E8A020' },
-  dotOk: { backgroundColor: '#2D6A27' },
-  statusTitle: { fontSize: 15, fontWeight: '600', color: '#1C3D1A' },
-  statusSub: { fontSize: 12, color: '#5A7A55', marginTop: 2 },
+  statusIcon: { width: 56, height: 56, borderRadius: 28, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center', marginRight: 16 },
+  statusTitle: { color: '#FFFFFF', fontSize: 18, fontWeight: '800' },
+  statusSub: { color: 'rgba(255,255,255,0.7)', fontSize: 12, marginTop: 4 },
   mainBtn: {
     backgroundColor: '#1C3D1A',
-    borderRadius: 20,
-    padding: 28,
+    borderRadius: 24,
+    padding: 24,
+    flexDirection: 'row', 
     alignItems: 'center',
     marginBottom: 16,
+    elevation: 4,
   },
-  mainBtnIcon: { fontSize: 40, marginBottom: 8 },
-  mainBtnText: { color: '#FFFFFF', fontSize: 20, fontWeight: '700' },
-  mainBtnSub: { color: '#9CAF99', fontSize: 13, marginTop: 6 },
+  mainBtnIcon: { marginRight: 16 },
+  mainBtnText: { color: '#FFFFFF', fontSize: 20, fontWeight: '800' },
+  mainBtnSub: { color: '#9CAF99', fontSize: 13, marginTop: 2 },
   syncBtn: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 18,
+    borderRadius: 18,
+    paddingVertical: 18,
     alignItems: 'center',
     borderWidth: 1.5,
     borderColor: '#2D6A27',
+    marginBottom: 32,
   },
-  syncBtnDisabled: { opacity: 0.6 },
-  syncBtnText: { color: '#2D6A27', fontSize: 16, fontWeight: '600' },
+  syncContent: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  syncBtnText: { color: '#2D6A27', fontSize: 16, fontWeight: '700' },
+  syncBtnDisabled: { opacity: 0.5 },
+  activitySection: { marginBottom: 40 },
+  sectionTitle: { fontSize: 12, fontWeight: '800', color: '#9CAF99', letterSpacing: 1.5, marginBottom: 16 },
+  activityCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    elevation: 1,
+  },
+  activityIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#F0F5F0', alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+  activityText: { fontSize: 15, fontWeight: '700', color: '#1C3D1A' },
+  activityDate: { fontSize: 12, color: '#9CAF99', marginTop: 2 },
+  emptyText: { color: '#9CAF99', fontSize: 14, textAlign: 'center', marginTop: 20 },
 })

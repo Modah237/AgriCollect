@@ -77,17 +77,24 @@ router.post('/sync', authenticate, validate(syncSchema), async (req: Request, re
         continue
       }
 
-      // Calculer les avances déductibles
+      const calculatedAmount = Math.round(Number(delivery.quantityKg) * priceRule.pricePerKg)
+      
+      // Trouver les avances non remboursées (FIFO)
       const advances = await prisma.advance.findMany({
-        where: { producerId: delivery.producerId, campaignId: delivery.campaignId },
+        where: { 
+          producerId: delivery.producerId, 
+          campaignId: delivery.campaignId,
+          repaidAmount: { lt: prisma.advance.fields.amount }
+        },
+        orderBy: { createdAt: 'asc' }
       })
-      const totalAdvance = advances.reduce(
-        (sum: number, a: { amount: number; repaidAmount: number }) => sum + (a.amount - a.repaidAmount),
+
+      const totalAvailableAdvance = advances.reduce(
+        (sum, a) => sum + (a.amount - a.repaidAmount), 
         0
       )
 
-      const calculatedAmount = Math.round(Number(delivery.quantityKg) * priceRule.pricePerKg)
-      const advanceDeducted = Math.min(totalAdvance, calculatedAmount)
+      const advanceDeducted = Math.min(totalAvailableAdvance, calculatedAmount)
       const netDue = calculatedAmount - advanceDeducted
 
       // Upsert idempotent — si offlineUuid déjà présent, retourne "duplicate"
@@ -100,30 +107,58 @@ router.post('/sync', authenticate, validate(syncSchema), async (req: Request, re
         continue
       }
 
-      await prisma.delivery.create({
-        data: {
-          offlineUuid: delivery.offlineUuid,
-          deviceId: delivery.deviceId,
-          campaignId: delivery.campaignId,
-          producerId: delivery.producerId,
-          collectorId,
-          culture: delivery.culture,
-          quantityKg: delivery.quantityKg,
-          qualityGrade: delivery.qualityGrade,
-          photoUrl: delivery.photoUrl,
-          notes: delivery.notes,
-          pricePerKg: priceRule.pricePerKg,
-          calculatedAmount,
-          advanceDeducted,
-          netDue,
-          createdOfflineAt: new Date(delivery.createdOfflineAt),
-          syncedAt: new Date(),
-        },
+      // Transaction Atomique : Création livraison + Mise à jour Avances
+      await prisma.$transaction(async (tx) => {
+        // 1. Créer la livraison
+        await tx.delivery.create({
+          data: {
+            offlineUuid: delivery.offlineUuid,
+            deviceId: delivery.deviceId,
+            campaignId: delivery.campaignId,
+            producerId: delivery.producerId,
+            collectorId,
+            culture: delivery.culture,
+            quantityKg: delivery.quantityKg,
+            qualityGrade: delivery.qualityGrade,
+            photoUrl: delivery.photoUrl,
+            notes: delivery.notes,
+            pricePerKg: priceRule.pricePerKg,
+            calculatedAmount,
+            advanceDeducted,
+            netDue,
+            createdOfflineAt: new Date(delivery.createdOfflineAt),
+            syncedAt: new Date(),
+          },
+        })
+
+        // 2. Répartir la déduction sur les avances
+        if (advanceDeducted > 0) {
+          let remainingToDeduct = advanceDeducted
+          for (const adv of advances) {
+            if (remainingToDeduct <= 0) break
+            
+            const unpaidAmount = adv.amount - adv.repaidAmount
+            const deduction = Math.min(unpaidAmount, remainingToDeduct)
+            
+            await tx.advance.update({
+              where: { id: adv.id },
+              data: { repaidAmount: { increment: deduction } }
+            })
+            
+            remainingToDeduct -= deduction
+          }
+        }
       })
 
-      results.push({ offlineUuid: delivery.offlineUuid, status: 'created' })
+      results.push({ 
+        offlineUuid: delivery.offlineUuid, 
+        status: 'created',
+        advanceDeducted,
+        netDue
+      })
     } catch (err) {
-      results.push({ offlineUuid: delivery.offlineUuid, status: 'error', error: 'Erreur serveur' })
+      console.error('[DeliverySyncError]', err)
+      results.push({ offlineUuid: delivery.offlineUuid, status: 'error', error: 'Erreur serveur lors de la transaction' })
     }
   }
 

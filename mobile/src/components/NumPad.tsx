@@ -5,6 +5,7 @@ interface NumPadProps {
   value: string
   onChange: (value: string) => void
   maxLength?: number
+  variant?: 'default' | 'transparent'
 }
 
 const KEYS = [
@@ -14,7 +15,7 @@ const KEYS = [
   ['', '0', '⌫'],
 ]
 
-export default function NumPad({ value, onChange, maxLength = 4 }: NumPadProps) {
+export default function NumPad({ value, onChange, maxLength = 4, variant = 'default' }: NumPadProps) {
   function handleKey(key: string) {
     if (key === '⌫') {
       onChange(value.slice(0, -1))
@@ -26,6 +27,8 @@ export default function NumPad({ value, onChange, maxLength = 4 }: NumPadProps) 
     }
   }
 
+  const isTransparent = variant === 'transparent'
+
   return (
     <View style={styles.container}>
       {KEYS.map((row, ri) => (
@@ -33,12 +36,21 @@ export default function NumPad({ value, onChange, maxLength = 4 }: NumPadProps) 
           {row.map((key, ki) => (
             <TouchableOpacity
               key={ki}
-              style={[styles.key, key === '' && styles.keyEmpty]}
+              style={[
+                styles.key, 
+                key === '' && styles.keyEmpty,
+                isTransparent && styles.keyTransparent,
+                (isTransparent && key === '') && styles.keyEmptyTransparent
+              ]}
               onPress={() => handleKey(key)}
               disabled={key === ''}
               activeOpacity={0.6}
             >
-              <Text style={[styles.keyText, key === '⌫' && styles.keyDelete]}>
+              <Text style={[
+                styles.keyText, 
+                key === '⌫' && styles.keyDelete,
+                isTransparent && styles.keyTextTransparent
+              ]}>
                 {key}
               </Text>
             </TouchableOpacity>
@@ -53,15 +65,22 @@ const styles = StyleSheet.create({
   container: { width: '100%' },
   row: { flexDirection: 'row', justifyContent: 'center', marginBottom: 12 },
   key: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     backgroundColor: '#1C3D1A',
-    marginHorizontal: 16,
+    marginHorizontal: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  keyTransparent: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
   keyEmpty: { backgroundColor: 'transparent' },
-  keyText: { fontSize: 28, fontWeight: '600', color: '#FFFFFF' },
+  keyEmptyTransparent: { backgroundColor: 'transparent', borderWidth: 0 },
+  keyText: { fontSize: 26, fontWeight: '600', color: '#FFFFFF' },
+  keyTextTransparent: { color: '#FFFFFF' },
   keyDelete: { fontSize: 22 },
 })
