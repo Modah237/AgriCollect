@@ -102,8 +102,10 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
 
 // ─── Démarrage ─────────────────────────────────────────────────────────────────
 
-app.listen(Number(PORT), '0.0.0.0', () => {
-  logger.info(`AgriCollect CM API — port ${PORT} — ${process.env.NODE_ENV ?? 'development'}`)
+const port = Number(PORT) || 3001
+
+app.listen(port, '0.0.0.0', () => {
+  logger.info(`AgriCollect CM API — port ${port} — ${process.env.NODE_ENV ?? 'development'} (0.0.0.0)`)
 
   // Worker BullMQ (si Redis disponible)
   process.nextTick(async () => {
