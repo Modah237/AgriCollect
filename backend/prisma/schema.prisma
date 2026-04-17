@@ -182,6 +182,8 @@ model Delivery {
   calculatedAmount Int         // quantityKg × pricePerKg en XAF
   advanceDeducted Int          @default(0) // Avances déduites
   netDue          Int          // calculatedAmount - advanceDeducted
+  paidAmount      Int          @default(0) // Montant déjà payé
+  isFullyPaid     Boolean      @default(false)
   notes           String?      // Note du collecteur
 
   // Champs offline — clés de déduplication
@@ -194,9 +196,10 @@ model Delivery {
   updatedAt DateTime @updatedAt
 
   // Relations
-  campaign   Campaign @relation(fields: [campaignId], references: [id])
-  producer   Producer @relation(fields: [producerId], references: [id])
-  collector  User     @relation("CollectorDeliveries", fields: [collectorId], references: [id])
+  campaign      Campaign              @relation(fields: [campaignId], references: [id])
+  producer      Producer              @relation(fields: [producerId], references: [id])
+  collector     User                  @relation("CollectorDeliveries", fields: [collectorId], references: [id])
+  paymentLinks  PaymentLineDelivery[]
 
   @@map("deliveries")
 }
@@ -239,10 +242,26 @@ model PaymentLine {
   updatedAt       DateTime          @updatedAt
 
   // Relations
-  batch    PaymentBatch @relation(fields: [batchId], references: [id])
-  producer Producer     @relation(fields: [producerId], references: [id])
+  batch         PaymentBatch          @relation(fields: [batchId], references: [id])
+  producer      Producer              @relation(fields: [producerId], references: [id])
+  deliveryLinks PaymentLineDelivery[]
 
   @@map("payment_lines")
+}
+
+model PaymentLineDelivery {
+  id            String   @id @default(cuid())
+  paymentLineId String
+  deliveryId    String
+  amount        Int      // Montant alloué à cette livraison spécifique dans ce paiement
+  createdAt     DateTime @default(now())
+
+  paymentLine PaymentLine @relation(fields: [paymentLineId], references: [id], onDelete: Cascade)
+  delivery    Delivery    @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+
+  @@index([paymentLineId])
+  @@index([deliveryId])
+  @@map("payment_line_deliveries")
 }
 
 model Advance {

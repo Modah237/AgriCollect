@@ -257,3 +257,82 @@ export function generateCampaignPDF(data: ReportData): Promise<Buffer> {
     doc.end()
   })
 }
+
+export interface TicketData {
+  gicName: string
+  producerName: string
+  culture: string
+  qualityGrade: string
+  quantityKg: number
+  pricePerKg: number
+  calculatedAmount: number
+  advanceDeducted: number
+  netDue: number
+  createdAt: Date
+  reference: string
+}
+
+export function generateDeliveryTicketPDF(data: TicketData): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    // Format portrait plus petit (type reçu/A6-ish)
+    const doc = new PDFDocument({ size: [280, 420], margin: 20 })
+    const chunks: Buffer[] = []
+
+    doc.on('data', (chunk: Buffer) => chunks.push(chunk))
+    doc.on('end', () => resolve(Buffer.concat(chunks)))
+    doc.on('error', reject)
+
+    const W = 280
+
+    // Header
+    doc.rect(0, 0, W, 60).fill(GREEN)
+    doc.fillColor('white').font('Helvetica-Bold').fontSize(14).text('BORDEREAU DE PESÉE', 20, 15)
+    doc.fontSize(8).font('Helvetica').text(data.gicName, 20, 35)
+
+    // Body
+    doc.fillColor(BLACK).moveDown(3)
+    doc.fontSize(7).fillColor(GRAY).text('RÉFÉRENCE', 20)
+    doc.fontSize(9).fillColor(BLACK).font('Helvetica-Bold').text(data.reference, 20)
+
+    doc.moveDown()
+    doc.fontSize(7).fillColor(GRAY).text('PRODUCTEUR', 20)
+    doc.fontSize(10).fillColor(BLACK).text(data.producerName, 20)
+
+    doc.moveDown(0.5)
+    doc.rect(20, doc.y, W - 40, 1).fill(LIGHT_GRAY)
+    doc.moveDown(0.5)
+
+    const grid = [
+      { l: 'Produit', v: data.culture.toUpperCase() },
+      { l: 'Qualité', v: `Grade ${data.qualityGrade}` },
+      { l: 'Poids', v: formatKg(data.quantityKg) },
+      { l: 'Prix Unitaire', v: formatXAF(data.pricePerKg) },
+    ]
+
+    grid.forEach((item) => {
+      const y = doc.y
+      doc.fontSize(8).fillColor(GRAY).text(item.l, 20, y)
+      doc.fontSize(8).fillColor(BLACK).font('Helvetica-Bold').text(item.v, 140, y, { align: 'right', width: 120 })
+      doc.moveDown(0.8)
+    })
+
+    doc.moveDown(0.5)
+    doc.rect(20, doc.y, W - 40, 40).fill(LIGHT_GREEN)
+    const totalY = doc.y - 40
+    doc.fillColor(GREEN).fontSize(7).text('MONTANT BRUT', 30, totalY + 8)
+    doc.fontSize(12).text(formatXAF(data.calculatedAmount), 30, totalY + 18, { width: W - 100 })
+
+    doc.moveDown(2)
+    if (data.advanceDeducted > 0) {
+      doc.fillColor(GRAY).fontSize(7).text(`DÉDUCTION AVANCE : -${formatXAF(data.advanceDeducted)}`, 20)
+      doc.moveDown(0.5)
+    }
+    doc.fillColor(BLACK).font('Helvetica-Bold').fontSize(9).text(`NET À PERCEVOIR : ${formatXAF(data.netDue)}`, 20)
+
+    // Footer
+    doc.fontSize(6).fillColor(GRAY).text(`Fait le ${formatDate(data.createdAt)}`, 20, 380, { align: 'center', width: W - 40 })
+    doc.text('Document généré par AgriCollect CM', 20, 390, { align: 'center', width: W - 40 })
+
+    doc.end()
+  })
+}

@@ -17,6 +17,10 @@ export const dictionaries = {
       status: 'Statut',
       all: 'Tout',
       date: 'Date',
+      inProgress: 'En cours',
+      exports: 'Exports',
+      generating: 'Génération...',
+      exporting: 'Export...',
     },
     auth: {
       welcome: 'Bienvenue sur AgriCollect',
@@ -40,6 +44,7 @@ export const dictionaries = {
       },
       recentActivity: 'Activité Récente',
       noActivity: 'Aucune activité récente',
+      noActiveCampaign: 'Aucune campagne active pour ce GIC.',
       payments: {
         title: 'Paiements Mobile Money',
         payAll: 'Initier le paiement groupé',
@@ -68,6 +73,18 @@ export const dictionaries = {
         date: 'Date',
       }
     },
+    campaigns: {
+      priceRules: 'Barèmes de prix',
+      noPriceRules: 'Aucun barème défini pour cette campagne.',
+      since: 'Depuis le',
+    },
+    reports: {
+      pdfReport: 'Rapport PDF',
+    },
+    exports: {
+      csvExport: 'Export CSV',
+      includesAllDeliveries: 'Inclut toutes les livraisons de la campagne active.',
+    },
   },
   en: {
     common: {
@@ -85,6 +102,10 @@ export const dictionaries = {
       status: 'Status',
       all: 'All',
       date: 'Date',
+      inProgress: 'In progress',
+      exports: 'Exports',
+      generating: 'Generating...',
+      exporting: 'Exporting...',
     },
     auth: {
       welcome: 'Welcome to AgriCollect',
@@ -108,6 +129,7 @@ export const dictionaries = {
       },
       recentActivity: 'Recent Activity',
       noActivity: 'No recent activity',
+      noActiveCampaign: 'No active campaign for this GIC.',
       payments: {
         title: 'Mobile Money Payments',
         payAll: 'Initiate bulk payment',
@@ -135,6 +157,18 @@ export const dictionaries = {
         amount: 'Amount',
         date: 'Date',
       }
+    },
+    campaigns: {
+      priceRules: 'Price rules',
+      noPriceRules: 'No price rules defined for this campaign.',
+      since: 'Since',
+    },
+    reports: {
+      pdfReport: 'PDF Report',
+    },
+    exports: {
+      csvExport: 'CSV Export',
+      includesAllDeliveries: 'Includes all deliveries for the active campaign.',
     },
   },
 }

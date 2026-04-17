@@ -63,11 +63,9 @@ async function processPaymentBatch(job: Job<PaymentJobData>) {
           });
 
           if (status === 'SUCCESSFUL') {
-            await prisma.paymentLine.update({
-              where: { id: line.id },
-              data: { status: 'CONFIRMED', confirmedAt: new Date() },
-            });
-            logger.info({ lineId: line.id }, 'Paiement confirmé par polling');
+            const { ProcurementService } = await import('../services/procurement');
+            await ProcurementService.confirmPaymentLine(line.id);
+            logger.info({ lineId: line.id }, 'Paiement confirmé par polling via ProcurementService');
             confirmed = true;
           } else if (status === 'FAILED') {
             await prisma.paymentLine.update({
@@ -88,21 +86,22 @@ async function processPaymentBatch(job: Job<PaymentJobData>) {
           },
         });
       }
-    } catch (err: any) {
-      logger.error({ err, lineId: line.id }, 'Erreur lors du traitement de la ligne de paiement');
+    } catch (err) {
+      const error = err as Error;
+      logger.error({ err: error, lineId: line.id }, 'Erreur lors du traitement de la ligne de paiement');
       await prisma.paymentLine.update({
         where: { id: line.id },
         data: {
           status: 'FAILED',
-          failureReason: err.message?.slice(0, 500) || 'Unknown error',
+          failureReason: error.message?.slice(0, 500) || 'Unknown error',
         },
       });
     }
   }
 
   const allLines = await prisma.paymentLine.findMany({ where: { batchId } });
-  const confirmedCount = allLines.filter((l: any) => l.status === 'CONFIRMED').length;
-  const failedCount = allLines.filter((l: any) => l.status === 'FAILED').length;
+  const confirmedCount = allLines.filter((l) => l.status === 'CONFIRMED').length;
+  const failedCount = allLines.filter((l) => l.status === 'FAILED').length;
 
   let batchStatus: 'COMPLETED' | 'PARTIAL' | 'CANCELLED';
   if (confirmedCount === allLines.length) batchStatus = 'COMPLETED';

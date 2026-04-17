@@ -25,14 +25,46 @@ router.post('/', async (req, res) => {
     if (externalId && externalId.startsWith('payout_')) {
       const lineId = externalId.replace('payout_', '');
       
-      await prisma.paymentLine.update({
-        where: { id: lineId },
-        data: {
-          status: status === 'SUCCESSFUL' ? 'CONFIRMED' : 'FAILED',
-          confirmedAt: status === 'SUCCESSFUL' ? new Date() : null,
-          fapshiStatus: status,
-        },
-      });
+      if (status === 'SUCCESSFUL') {
+        const { ProcurementService } = await import('../services/procurement');
+        const { sendPaymentConfirmation } = await import('../services/sms');
+
+        const confirmedLine = await ProcurementService.confirmPaymentLine(lineId);
+        
+        // Récupérer le nom du producteur pour le SMS
+        const lineWithProducer = await prisma.paymentLine.findUnique({
+          where: { id: lineId },
+          include: { producer: { select: { fullName: true, phoneMomo: true } } }
+        });
+
+        if (lineWithProducer?.producer) {
+          await sendPaymentConfirmation(
+            lineWithProducer.producer.phoneMomo,
+            Number(confirmedLine.amount),
+            lineWithProducer.producer.fullName
+          ).catch(e => logger.error({ e }, '[Fapshi] Failed to send SMS'));
+        }
+
+        logger.info({ lineId }, '[Fapshi] Ligne confirmée via Webhook + SMS');
+      } else {
+        const { sendPaymentFailure } = await import('../services/sms');
+        const failedLine = await prisma.paymentLine.update({
+          where: { id: lineId },
+          data: {
+            status: 'FAILED',
+            fapshiStatus: status,
+          },
+          include: { producer: { select: { fullName: true, phoneMomo: true } } }
+        });
+
+        if (failedLine.producer) {
+          await sendPaymentFailure(
+            failedLine.producer.phoneMomo,
+            Number(failedLine.amount),
+            failedLine.producer.fullName
+          ).catch(e => logger.error({ e }, '[Fapshi] Failed to send failure SMS'));
+        }
+      }
 
       // Mettre à jour le batch si toutes les lignes sont traitées
       const line = await prisma.paymentLine.findUnique({

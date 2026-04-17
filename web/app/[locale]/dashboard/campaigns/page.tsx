@@ -1,9 +1,11 @@
+"use client"
+
 import { useState, use } from 'react'
 import { getUser } from '@/lib/auth'
 import { getDictionary, Locale } from '@/lib/dictionaries'
 import { trpc } from '@/lib/trpc'
 
-export default function CampaignsPage() {
+export default function CampaignsPage({ params }: { params: Promise<{ locale: string }> }) {
   const user = getUser()
   const [exporting, setExporting] = useState<'pdf' | 'csv' | null>(null)
   const { locale } = use(params) as { locale: Locale }
@@ -14,16 +16,20 @@ export default function CampaignsPage() {
     { enabled: !!user?.gicId }
   )
 
+  const exportPdfMutation = trpc.reports.exportCampaignPdf.useMutation()
+  const exportCsvMutation = trpc.exports.exportCampaignCsv.useMutation()
+
   async function handleExport(type: 'pdf' | 'csv') {
     if (!campaign?.id) {
       alert('Aucune campagne active pour l\'exportation.')
       return
     }
-    setExporting(type) // Set loading state
+    setExporting(type)
     try {
       if (type === 'pdf') {
-        const result = await trpc.reports.exportCampaignPdf.mutate({ campaignId: campaign.id })
-        const pdfBlob = new Blob([Buffer.from(result.data, 'base64')], { type: result.contentType })
+        const result = await exportPdfMutation.mutateAsync({ campaignId: campaign.id })
+        const bytes = Uint8Array.from(atob(result.data), (c) => c.charCodeAt(0))
+        const pdfBlob = new Blob([bytes], { type: result.contentType })
         const url = URL.createObjectURL(pdfBlob)
         const a = document.createElement('a')
         a.href = url
@@ -33,7 +39,7 @@ export default function CampaignsPage() {
         document.body.removeChild(a)
         URL.revokeObjectURL(url)
       } else {
-        const result = await trpc.exports.exportCampaignCsv.mutate({ campaignId: campaign.id })
+        const result = await exportCsvMutation.mutateAsync({ campaignId: campaign.id })
         const csvBlob = new Blob([result.data], { type: result.contentType })
         const url = URL.createObjectURL(csvBlob)
         const a = document.createElement('a')
@@ -46,11 +52,11 @@ export default function CampaignsPage() {
       }
     } catch (err) {
       console.error('Export error:', err)
-      let errorMessage = 'Erreur lors du téléchargement.';
+      let errorMessage = 'Erreur lors du téléchargement.'
       if (err instanceof Error) {
-        errorMessage += ` ${err.message}`;
+        errorMessage += ` ${err.message}`
       }
-      alert(errorMessage); // Keep alert for now, but consider a toast/modal
+      alert(errorMessage)
     } finally {
       setExporting(null)
     }
@@ -64,7 +70,7 @@ export default function CampaignsPage() {
         <div className="text-gray-400">{dict.common.loading}</div>
       ) : !campaign ? (
         <div className="bg-white rounded-xl shadow-sm p-8 text-center text-gray-400">
-          {dict.dashboard.noActiveCampaign} {/* Assuming this key exists or will be added */}
+          {dict.dashboard.noActiveCampaign}
         </div>
       ) : (
         <div className="bg-white rounded-xl shadow-sm p-6 max-w-2xl">
@@ -73,7 +79,9 @@ export default function CampaignsPage() {
               <h3 className="text-xl font-semibold text-gray-900">{campaign.name}</h3>
               <p className="text-gray-400 text-sm mt-1">
                 Du {new Date(campaign.startDate).toLocaleDateString(locale === 'fr' ? 'fr-FR' : 'en-US')}
-                {campaign.endDate ? ` au ${new Date(campaign.endDate).toLocaleDateString(locale === 'fr' ? 'fr-FR' : 'en-US')}` : ` (${dict.common.inProgress})`} {/* Assuming inProgress key */}
+                {campaign.endDate
+                  ? ` au ${new Date(campaign.endDate).toLocaleDateString(locale === 'fr' ? 'fr-FR' : 'en-US')}`
+                  : ` (${dict.common.inProgress})`}
               </p>
             </div>
             <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium">
@@ -81,33 +89,33 @@ export default function CampaignsPage() {
             </span>
           </div>
 
-          <h4 className="font-medium text-gray-700 mb-3">{dict.campaigns.priceRules}</h4> {/* Assuming campaigns.priceRules key */}
+          <h4 className="font-medium text-gray-700 mb-3">{dict.campaigns.priceRules}</h4>
           <div className="space-y-2 mb-8">
             {campaign.priceRules?.length === 0 ? (
-              <p className="text-gray-400 text-sm">{dict.campaigns.noPriceRules}</p> {/* Assuming campaigns.noPriceRules key */}
+              <p className="text-gray-400 text-sm">{dict.campaigns.noPriceRules}</p>
             ) : (
-            campaign.priceRules?.map((r: {id: string; culture: string; qualityGrade: string; pricePerKg: number; effectiveFrom: string | Date }) => (
-            <div key={r.id} className="flex items-center justify-between bg-gray-50 rounded-lg px-4 py-3">
-              <div>
-                <span className="font-medium text-gray-800">{r.culture}</span>
-                <span className="ml-2 px-2 py-0.5 bg-white border rounded text-xs text-gray-600">
-                  Grade {r.qualityGrade}
-                </span>
-              </div>
-              <div className="text-right">
-                <p className="font-semibold text-green-700">{Number(r.pricePerKg).toLocaleString('fr-FR')} XAF/kg</p>
-                <p className="text-xs text-gray-400"> {/* Assuming campaigns.since key */}
-                  {dict.campaigns.since} {new Date(r.effectiveFrom).toLocaleDateString(locale === 'fr' ? 'fr-FR' : 'en-US')}
-                </p>
-              </div>
-            </div>
-            ))
+              campaign.priceRules?.map((r: any) => (
+                <div key={r.id} className="flex items-center justify-between bg-gray-50 rounded-lg px-4 py-3">
+                  <div>
+                    <span className="font-medium text-gray-800">{r.culture}</span>
+                    <span className="ml-2 px-2 py-0.5 bg-white border rounded text-xs text-gray-600">
+                      Grade {r.qualityGrade}
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-semibold text-green-700">{Number(r.pricePerKg).toLocaleString('fr-FR')} XAF/kg</p>
+                    <p className="text-xs text-gray-400">
+                      {dict.campaigns.since} {new Date(r.effectiveFrom || '').toLocaleDateString(locale === 'fr' ? 'fr-FR' : 'en-US')}
+                    </p>
+                  </div>
+                </div>
+              ))
             )}
           </div>
 
           {/* ── Export ────────────────────────────────────────────────────── */}
           <div className="border-t pt-6">
-            <h4 className="font-medium text-gray-700 mb-3">{dict.common.exports}</h4> {/* Assuming common.exports key */}
+            <h4 className="font-medium text-gray-700 mb-3">{dict.common.exports}</h4>
             <div className="flex gap-3">
               <button
                 onClick={() => handleExport('pdf')}
@@ -120,9 +128,9 @@ export default function CampaignsPage() {
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
                 ) : (
-                  <span>📄</span> // Consider using an icon from Lucide React
+                  <span>📄</span>
                 )}
-                {exporting === 'pdf' ? dict.common.generating : dict.reports.pdfReport} {/* Assuming common.generating and reports.pdfReport keys */}
+                {exporting === 'pdf' ? dict.common.generating : dict.reports.pdfReport}
               </button>
 
               <button
@@ -136,13 +144,13 @@ export default function CampaignsPage() {
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
                 ) : (
-                  <span>📊</span> // Consider using an icon from Lucide React
+                  <span>📊</span>
                 )}
-                {exporting === 'csv' ? dict.common.exporting : dict.exports.csvExport} {/* Assuming common.exporting and exports.csvExport keys */}
+                {exporting === 'csv' ? dict.common.exporting : dict.exports.csvExport}
               </button>
             </div>
             <p className="text-xs text-gray-400 mt-2">
-              {dict.exports.includesAllDeliveries} {/* Assuming exports.includesAllDeliveries key */}
+              {dict.exports.includesAllDeliveries}
             </p>
           </div>
         </div>

@@ -6,7 +6,7 @@ const defaultLocale = 'fr'
 
 export function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
-  const token = request.cookies.get('agricollect_token')?.value
+  const token = request.cookies.get('token')?.value
 
   // 1. Vérifier si le pathname a déjà un locale
   const pathnameHasLocale = locales.some(
