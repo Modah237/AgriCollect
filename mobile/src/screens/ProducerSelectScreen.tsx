@@ -1,121 +1,126 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   FlatList,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
   SafeAreaView,
   ActivityIndicator,
   StatusBar,
-} from 'react-native'
-import { LinearGradient } from 'expo-linear-gradient'
-import { Ionicons } from '@expo/vector-icons'
-import { db, SQLiteProducer } from '../db/database'
+} from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import { db, SQLiteProducer } from '../db/database';
 
 interface ProducerSelectScreenProps {
-  onSelect: (producer: { id: string; fullName: string; phoneMomo: string }) => void
-  onBack: () => void
+  onSelect: (producer: { id: string; fullName: string; phoneMomo: string }) => void;
+  onBack: () => void;
 }
 
 export default function ProducerSelectScreen({ onSelect, onBack }: ProducerSelectScreenProps) {
-  const [producers, setProducers] = useState<SQLiteProducer[]>([])
-  const [search, setSearch] = useState('')
-  const [loading, setLoading] = useState(true)
+  const [producers, setProducers] = useState<SQLiteProducer[]>([]);
+  const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadProducers()
-  }, [])
+    loadProducers();
+  }, []);
 
   async function loadProducers() {
     try {
       const all: SQLiteProducer[] = await db.getAllAsync(
         'SELECT * FROM producers WHERE is_active = 1 ORDER BY full_name ASC'
       );
-      setProducers(all)
+      setProducers(all);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   }
 
   const filtered = producers.filter((p) => {
-    if (!search) return true
+    if (!search) return true;
     const normalize = (s: string) =>
-      s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    return normalize(p.full_name).includes(normalize(search))
-  })
+      s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    return normalize(p.full_name).includes(normalize(search));
+  });
 
-  function renderItem({ item }: { item: SQLiteProducer }) {
-    const initials = item.full_name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase()
+  const renderItem = ({ item }: { item: SQLiteProducer }) => {
+    const initials = item.full_name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase();
 
     return (
       <TouchableOpacity
-        style={styles.card}
+        className="flex-row items-center bg-white rounded-2xl p-4 mb-3 shadow-sm"
         onPress={() => onSelect({ id: item.id, fullName: item.full_name, phoneMomo: item.phone_momo })}
         activeOpacity={0.7}
       >
         <LinearGradient
           colors={['#2D6A27', '#1C3D1A']}
-          style={styles.avatar}
+          className="w-12 h-12 rounded-full items-center justify-center mr-4"
         >
-          <Text style={styles.avatarText}>{initials}</Text>
+          <Text className="text-white text-lg font-extrabold">{initials}</Text>
         </LinearGradient>
 
-        <View style={styles.cardInfo}>
-          <Text style={styles.cardName}>{item.full_name}</Text>
-          <View style={styles.cardDetail}>
-            <Ionicons name="wallet-outline" size={14} color="#5A7A55" />
-            <Text style={styles.cardPhone}> {item.momo_operator} · {item.phone_momo}</Text>
+        <View className="flex-1">
+          <Text className="text-lg font-bold text-slate-900">{item.full_name}</Text>
+          <View className="flex-row items-center mt-1">
+            <Ionicons name="wallet-outline" size={12} color="#64748b" />
+            <Text className="text-sm text-slate-500 ml-1">
+              {item.momo_operator} · {item.phone_momo}
+            </Text>
           </View>
         </View>
-        <Ionicons name="chevron-forward" size={20} color="#C5D9C2" />
+        <Ionicons name="chevron-forward" size={20} color="#cbd5e1" />
       </TouchableOpacity>
-    )
-  }
+    );
+  };
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView className="flex-1 bg-slate-50">
       <StatusBar barStyle="dark-content" />
-      {/* Header Premium */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={onBack} style={styles.backBtn}>
+      
+      {/* Header */}
+      <View className="px-5 py-4 flex-row items-center justify-between">
+        <TouchableOpacity 
+          onPress={onBack} 
+          className="w-10 h-10 rounded-full bg-white items-center justify-center shadow-sm"
+        >
           <Ionicons name="chevron-back" size={24} color="#2D6A27" />
         </TouchableOpacity>
-        <Text style={styles.title}>Choisir un producteur</Text>
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>{filtered.length} MEMBRES</Text>
+        <Text className="text-xl font-black text-slate-900">Producteurs</Text>
+        <View className="bg-green-100 px-2 py-1 rounded-md">
+          <Text className="text-[10px] font-bold text-green-800">{filtered.length} MEMBRES</Text>
         </View>
       </View>
 
-      {/* Barre de recherche avec icône */}
-      <View style={styles.searchContainer}>
-        <View style={styles.searchBox}>
-          <Ionicons name="search-outline" size={20} color="#9CAF99" style={styles.searchIcon} />
+      {/* Search */}
+      <View className="px-5 pb-4">
+        <View className="flex-row items-center bg-white rounded-xl px-4 h-14 shadow-sm">
+          <Ionicons name="search-outline" size={20} color="#94a3b8" className="mr-3" />
           <TextInput
-            style={styles.searchInput}
-            placeholder="Rechercher un nom..."
+            className="flex-1 text-base text-slate-900 font-medium"
+            placeholder="Rechercher par nom..."
             value={search}
             onChangeText={setSearch}
-            placeholderTextColor="#9CAF99"
+            placeholderTextColor="#94a3b8"
           />
           {search.length > 0 && (
             <TouchableOpacity onPress={() => setSearch('')}>
-              <Ionicons name="close-circle" size={20} color="#C5D9C2" />
+              <Ionicons name="close-circle" size={20} color="#cbd5e1" />
             </TouchableOpacity>
           )}
         </View>
       </View>
 
       {loading ? (
-        <ActivityIndicator size="large" color="#2D6A27" style={{ marginTop: 40 }} />
+        <ActivityIndicator size="large" color="#2D6A27" className="mt-10" />
       ) : filtered.length === 0 ? (
-        <View style={styles.empty}>
-          <Ionicons name="people-outline" size={64} color="#C5D9C2" />
-          <Text style={styles.emptyText}>
+        <View className="flex-1 items-center justify-center p-8">
+          <Ionicons name="people-outline" size={64} color="#e2e8f0" />
+          <Text className="text-base text-slate-400 text-center mt-4 leading-6">
             {search
-              ? `Aucun producteur trouvé pour "${search}"`
-              : 'Aucun producteur enregistré.\nLancez une synchronisation.'}
+              ? `Aucun membre trouvé pour "${search}"`
+              : 'Aucun producteur enregistré.\nSynchronisez l\'application.'}
           </Text>
         </View>
       ) : (
@@ -123,86 +128,10 @@ export default function ProducerSelectScreen({ onSelect, onBack }: ProducerSelec
           data={filtered}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
-          contentContainerStyle={styles.list}
+          contentContainerClassName="px-5 pb-10"
           showsVerticalScrollIndicator={false}
         />
       )}
     </SafeAreaView>
-  )
+  );
 }
-
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F8F6F2' },
-  header: { 
-    padding: 16, 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    justifyContent: 'space-between' 
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  title: { fontSize: 20, fontWeight: '800', color: '#1C3D1A' },
-  badge: {
-    backgroundColor: '#E0EBD9',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  badgeText: { fontSize: 10, fontWeight: '700', color: '#2D6A27' },
-  searchContainer: { paddingHorizontal: 16, paddingBottom: 16 },
-  searchBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    height: 54,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 5,
-  },
-  searchIcon: { marginRight: 10 },
-  searchInput: { flex: 1, fontSize: 16, color: '#1C3D1A', fontWeight: '500' },
-  list: { paddingHorizontal: 16, paddingBottom: 24 },
-  card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 12,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-  },
-  avatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 14,
-  },
-  avatarText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
-  cardInfo: { flex: 1 },
-  cardName: { fontSize: 17, fontWeight: '700', color: '#1C3D1A' },
-  cardDetail: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
-  cardPhone: { fontSize: 13, color: '#5A7A55' },
-  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
-  emptyText: { fontSize: 15, color: '#5A7A55', textAlign: 'center', lineHeight: 24, marginTop: 16 },
-})
