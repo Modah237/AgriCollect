@@ -1,11 +1,12 @@
 module.exports = function (api) {
   api.cache(true)
   return {
-    presets: ['babel-preset-expo'],
+    presets: [
+      ["babel-preset-expo", { jsxImportSource: "nativewind" }],
+      "nativewind/babel",
+    ],
     plugins: [
-      // Requis pour les décorateurs WatermelonDB (@field, @date, etc.)
-      ['@babel/plugin-proposal-decorators', { legacy: true }],
-      ['@babel/plugin-proposal-class-properties', { loose: true }],
+      "react-native-reanimated/plugin",
     ],
   }
 }

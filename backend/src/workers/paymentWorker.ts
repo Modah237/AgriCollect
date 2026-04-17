@@ -1,156 +1,136 @@
-import { Worker, Job } from 'bullmq'
-import { getRedisConnection } from '../queues/paymentQueue'
-const redisConnection = getRedisConnection()
-import { prisma } from '../lib/prisma'
-import { sendPayout, getPayoutStatus } from '../services/fapshi'
-import { sendPaymentConfirmation, sendPaymentFailure } from '../services/sms'
+import { Worker, Job } from 'bullmq';
+import { getRedisConnection } from '../queues/paymentQueue';
+const redisConnection = getRedisConnection();
+import { prisma } from '../lib/prisma';
+import { sendPayout, getPayoutStatus } from '../services/fapshi';
+import { logger } from '../lib/logger';
 
 export interface PaymentJobData {
-  batchId: string
+  batchId: string;
 }
 
-const PAYMENT_TIMEOUT_MS = 5 * 60 * 1000 // 5 minutes
+const PAYMENT_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
 async function processPaymentBatch(job: Job<PaymentJobData>) {
-  const { batchId } = job.data
+  const { batchId } = job.data;
 
-  // Marquer le batch en cours
+  logger.info({ batchId }, '[PaymentWorker] Traitement du batch démarré');
+
   await prisma.paymentBatch.update({
     where: { id: batchId },
     data: { status: 'PROCESSING' },
-  })
+  });
 
   const lines = await prisma.paymentLine.findMany({
     where: { batchId, status: 'PENDING' },
     include: { producer: true },
-  })
+  });
 
   for (const line of lines) {
     try {
-      // 1. Appeler Fapshi
       const result = await sendPayout(
         line.producer.phoneMomo,
         Number(line.amount),
         line.id
-      )
+      );
 
-      // 2. Mettre à jour la ligne en SUBMITTED avec la référence Fapshi
       await prisma.paymentLine.update({
         where: { id: line.id },
         data: {
           status: 'SUBMITTED',
-          fapshiTxRef: result.transId, // Fapshi renvoie souvent transId dans la doc
+          fapshiTxRef: result.transId,
           fapshiStatus: result.status,
         },
-      })
+      });
 
-      // 3. Attendre confirmation via polling (le webhook sera prioritaire s'il arrive)
-      let confirmed = false
-      const deadline = Date.now() + PAYMENT_TIMEOUT_MS
+      let confirmed = false;
+      const deadline = Date.now() + PAYMENT_TIMEOUT_MS;
 
       while (Date.now() < deadline && !confirmed) {
-        await new Promise((r) => setTimeout(r, 10000)) // poll toutes les 10s
+        await new Promise((r) => setTimeout(r, 10000));
 
-        // Vérifier si le webhook a déjà confirmé
-        const current = await prisma.paymentLine.findUnique({ where: { id: line.id } })
+        const current = await prisma.paymentLine.findUnique({ where: { id: line.id } });
         if (current?.status === 'CONFIRMED' || current?.status === 'FAILED') {
-          confirmed = true
-          break
+          confirmed = true;
+          break;
         }
 
-        // Sinon, interroger Fapshi directement (si nous avons le transId)
         if (result.transId) {
-          const status = await getPayoutStatus(result.transId)
+          const status = await getPayoutStatus(result.transId);
           await prisma.paymentLine.update({
             where: { id: line.id },
             data: { fapshiStatus: status }
-          })
+          });
 
           if (status === 'SUCCESSFUL') {
             await prisma.paymentLine.update({
               where: { id: line.id },
               data: { status: 'CONFIRMED', confirmedAt: new Date() },
-            })
-            await sendPaymentConfirmation(
-              line.producer.phoneMomo,
-              Number(line.amount),
-              line.producer.fullName
-            ).catch(console.error) // Ne pas bloquer si SMS échoue
-            confirmed = true
+            });
+            logger.info({ lineId: line.id }, 'Paiement confirmé par polling');
+            confirmed = true;
           } else if (status === 'FAILED') {
             await prisma.paymentLine.update({
               where: { id: line.id },
               data: { status: 'FAILED', failureReason: 'Fapshi: payout failed' },
-            })
-            await sendPaymentFailure(
-              line.producer.phoneMomo,
-              Number(line.amount),
-              line.producer.fullName
-            ).catch(console.error)
-            confirmed = true
+            });
+            confirmed = true;
           }
         }
       }
 
-      // 4. Timeout atteint sans confirmation
       if (!confirmed) {
         await prisma.paymentLine.update({
           where: { id: line.id },
           data: {
             status: 'FAILED',
-            failureReason: 'Timeout: no confirmation received after 5 minutes',
+            failureReason: 'Timeout: no confirmation received',
           },
-        })
-        await sendPaymentFailure(
-          line.producer.phoneMomo,
-          Number(line.amount),
-          line.producer.fullName
-        ).catch(console.error)
+        });
       }
     } catch (err: any) {
-      console.error(`PaymentLine ${line.id} error:`, err.message)
+      logger.error({ err, lineId: line.id }, 'Erreur lors du traitement de la ligne de paiement');
       await prisma.paymentLine.update({
         where: { id: line.id },
         data: {
           status: 'FAILED',
           failureReason: err.message?.slice(0, 500) || 'Unknown error',
         },
-      })
+      });
     }
   }
 
-  // 5. Calculer le statut final du batch
-  const allLines = await prisma.paymentLine.findMany({ where: { batchId } })
-  const confirmed = allLines.filter((l: any) => l.status === 'CONFIRMED').length
-  const failed = allLines.filter((l: any) => l.status === 'FAILED').length
+  const allLines = await prisma.paymentLine.findMany({ where: { batchId } });
+  const confirmedCount = allLines.filter((l: any) => l.status === 'CONFIRMED').length;
+  const failedCount = allLines.filter((l: any) => l.status === 'FAILED').length;
 
-  let batchStatus: 'COMPLETED' | 'PARTIAL' | 'CANCELLED'
-  if (confirmed === allLines.length) batchStatus = 'COMPLETED'
-  else if (confirmed === 0) batchStatus = 'CANCELLED'
-  else batchStatus = 'PARTIAL'
+  let batchStatus: 'COMPLETED' | 'PARTIAL' | 'CANCELLED';
+  if (confirmedCount === allLines.length) batchStatus = 'COMPLETED';
+  else if (confirmedCount === 0) batchStatus = 'CANCELLED';
+  else batchStatus = 'PARTIAL';
 
   await prisma.paymentBatch.update({
     where: { id: batchId },
     data: { status: batchStatus, completedAt: new Date() },
-  })
+  });
 
-  return { batchId, confirmed, failed, total: allLines.length, status: batchStatus }
+  return { batchId, confirmed: confirmedCount, failed: failedCount, total: allLines.length, status: batchStatus };
 }
 
 export function startPaymentWorker() {
   const worker = new Worker<PaymentJobData>('payments', processPaymentBatch, {
     connection: redisConnection,
-    concurrency: 2, // Max 2 batches en parallèle
-  })
+    concurrency: 2,
+  });
 
   worker.on('completed', (job, result) => {
-    console.log(`[PaymentWorker] Batch ${result.batchId} terminé — ${result.status} (${result.confirmed}/${result.total})`)
-  })
+    logger.info({ result }, '[PaymentWorker] Job terminé');
+  });
 
   worker.on('failed', (job, err) => {
-    console.error(`[PaymentWorker] Job ${job?.id} échoué:`, err.message)
-  })
+    logger.error({ jobId: job?.id, err }, '[PaymentWorker] Job échoué');
+  });
 
-  console.log('[PaymentWorker] Démarré')
-  return worker
+  logger.info('[PaymentWorker] Démarré');
+  return worker;
 }

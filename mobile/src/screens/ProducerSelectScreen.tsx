@@ -12,7 +12,7 @@ import {
 } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Ionicons } from '@expo/vector-icons'
-import { database, Producer } from '../db/database'
+import { db, SQLiteProducer } from '../db/database'
 
 interface ProducerSelectScreenProps {
   onSelect: (producer: { id: string; fullName: string; phoneMomo: string }) => void
@@ -20,7 +20,7 @@ interface ProducerSelectScreenProps {
 }
 
 export default function ProducerSelectScreen({ onSelect, onBack }: ProducerSelectScreenProps) {
-  const [producers, setProducers] = useState<Producer[]>([])
+  const [producers, setProducers] = useState<SQLiteProducer[]>([])
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
 
@@ -29,25 +29,30 @@ export default function ProducerSelectScreen({ onSelect, onBack }: ProducerSelec
   }, [])
 
   async function loadProducers() {
-    const all = await database.get<Producer>('producers').query().fetch()
-    setProducers(all.filter((p) => p.isActive))
-    setLoading(false)
+    try {
+      const all: SQLiteProducer[] = await db.getAllAsync(
+        'SELECT * FROM producers WHERE is_active = 1 ORDER BY full_name ASC'
+      );
+      setProducers(all)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const filtered = producers.filter((p) => {
     if (!search) return true
     const normalize = (s: string) =>
       s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    return normalize(p.fullName).includes(normalize(search))
+    return normalize(p.full_name).includes(normalize(search))
   })
 
-  function renderItem({ item }: { item: Producer }) {
-    const initials = item.fullName.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase()
+  function renderItem({ item }: { item: SQLiteProducer }) {
+    const initials = item.full_name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase()
 
     return (
       <TouchableOpacity
         style={styles.card}
-        onPress={() => onSelect({ id: item.serverId, fullName: item.fullName, phoneMomo: item.phoneMomo })}
+        onPress={() => onSelect({ id: item.id, fullName: item.full_name, phoneMomo: item.phone_momo })}
         activeOpacity={0.7}
       >
         <LinearGradient
@@ -58,10 +63,10 @@ export default function ProducerSelectScreen({ onSelect, onBack }: ProducerSelec
         </LinearGradient>
 
         <View style={styles.cardInfo}>
-          <Text style={styles.cardName}>{item.fullName}</Text>
+          <Text style={styles.cardName}>{item.full_name}</Text>
           <View style={styles.cardDetail}>
             <Ionicons name="wallet-outline" size={14} color="#5A7A55" />
-            <Text style={styles.cardPhone}> {item.momoOperator} · {item.phoneMomo}</Text>
+            <Text style={styles.cardPhone}> {item.momo_operator} · {item.phone_momo}</Text>
           </View>
         </View>
         <Ionicons name="chevron-forward" size={20} color="#C5D9C2" />

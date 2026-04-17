@@ -14,8 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient'
 import { Ionicons } from '@expo/vector-icons'
 import { fullSync, countPendingDeliveries } from '../sync/syncEngine'
 import { getUser } from '../stores/authStore'
-import { database, Delivery } from '../db/database'
-import { Q } from '@nozbe/watermelondb'
+import { db, SQLiteDelivery } from '../db/database'
 
 interface SyncScreenProps {
   gicId: string
@@ -28,7 +27,7 @@ export default function SyncScreen({ gicId, onNewDelivery, onLogout }: SyncScree
   const [pending, setPending] = useState(0)
   const [lastSync, setLastSync] = useState<Date | null>(null)
   const [userName, setUserName] = useState('')
-  const [recentDeliveries, setRecentDeliveries] = useState<any[]>([])
+  const [recentDeliveries, setRecentDeliveries] = useState<SQLiteDelivery[]>([])
 
   useEffect(() => {
     refresh()
@@ -40,9 +39,9 @@ export default function SyncScreen({ gicId, onNewDelivery, onLogout }: SyncScree
     setPending(count)
     
     // Charger les 3 dernières livraisons pour l'affichage 'Activité'
-    const recent = await database.get<Delivery>('deliveries')
-      .query(Q.sortBy('created_offline_at', Q.desc), Q.take(3))
-      .fetch()
+    const recent: SQLiteDelivery[] = await db.getAllAsync(
+      'SELECT * FROM deliveries ORDER BY created_offline_at DESC LIMIT 3'
+    );
     
     setRecentDeliveries(recent)
   }
@@ -140,17 +139,17 @@ export default function SyncScreen({ gicId, onNewDelivery, onLogout }: SyncScree
             <Text style={styles.emptyText}>Aucune livraison pour le moment.</Text>
           ) : (
             recentDeliveries.map((d) => (
-              <View key={d.id} style={styles.activityCard}>
+              <View key={d.offline_uuid} style={styles.activityCard}>
                 <View style={styles.activityIcon}>
                   <Ionicons name="cube-outline" size={18} color="#2D6A27" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.activityText}>{d.quantityKg} kg de {d.culture}</Text>
+                  <Text style={styles.activityText}>{d.quantity_kg} kg de {d.culture}</Text>
                   <Text style={styles.activityDate}>
-                    {new Date(d.createdOfflineAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                    {new Date(d.created_offline_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
                   </Text>
                 </View>
-                {d.isSynced ? (
+                {d.is_synced ? (
                   <Ionicons name="checkmark-circle" size={20} color="#2D6A27" />
                 ) : (
                   <Ionicons name="time-outline" size={20} color="#F2994A" />

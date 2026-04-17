@@ -1,140 +1,119 @@
-import { database } from '../db/database'
-import { Delivery, Producer, PriceRule } from '../db/database'
-import { fetchProducers, fetchActiveCampaign, syncDeliveries } from '../services/api'
+import { db, SQLiteProducer, SQLitePriceRule, SQLiteDelivery } from '../db/database'
+import { trpcClient } from '../lib/trpc';
 import { getOrCreateDeviceId, saveCampaignId } from '../stores/authStore'
 
 // ─── Pull : Synchroniser les données depuis le serveur vers SQLite ───────────
 
 export async function pullFromServer(gicId: string): Promise<void> {
   const [producers, campaign] = await Promise.all([
-    fetchProducers(gicId),
-    fetchActiveCampaign(gicId).catch(() => null), // Pas de campagne active = OK
-  ])
+    trpcClient.gic.getProducers.query({ gicId }),
+    trpcClient.gic.getActiveCampaign.query({ gicId })
+  ]);
 
-  await database.write(async () => {
-    // Mettre à jour les producteurs
-    const producerCollection = database.get<Producer>('producers')
-    const existingProducers = await producerCollection.query().fetch()
-    const existingMap = new Map(existingProducers.map((p) => [p.serverId, p]))
-
+  // Utilisation d'une transaction pour garantir l'intégrité
+  await db.withTransactionAsync(async () => {
+    // 1. Mettre à jour les producteurs
     for (const p of producers) {
-      const existing = existingMap.get(p.id)
-      if (existing) {
-        await existing.update((record) => {
-          record.fullName = p.fullName
-          record.phoneMomo = p.phoneMomo
-          record.phoneSms = p.phoneSms ?? ''
-          record.momoOperator = p.momoOperator
-          record.isActive = true
-          record.syncedAt = new Date()
-        })
-      } else {
-        await producerCollection.create((record) => {
-          record.serverId = p.id
-          record.fullName = p.fullName
-          record.phoneMomo = p.phoneMomo
-          record.phoneSms = p.phoneSms ?? ''
-          record.momoOperator = p.momoOperator
-          record.isActive = true
-          record.syncedAt = new Date()
-        })
-      }
+      await db.runAsync(
+        `INSERT INTO producers (id, full_name, phone_momo, phone_sms, momo_operator, is_active, synced_at)
+         VALUES (?, ?, ?, ?, ?, 1, ?)
+         ON CONFLICT(id) DO UPDATE SET
+         full_name = excluded.full_name,
+         phone_momo = excluded.phone_momo,
+         phone_sms = excluded.phone_sms,
+         momo_operator = excluded.momo_operator,
+         synced_at = excluded.synced_at`,
+        [p.id, p.fullName, p.phoneMomo, p.phoneSms ?? '', p.momoOperator, new Date().toISOString()]
+      );
     }
 
-    // Persister le campaignId pour les redémarrages de l'app
+    // 2. Persister le campaignId
     if (campaign) {
-      await saveCampaignId(campaign.id)
-    }
+      await saveCampaignId(campaign.id);
 
-    // Mettre à jour les prix de la campagne active
-    if (campaign) {
-      const priceCollection = database.get<PriceRule>('price_rules')
-      // Supprimer les anciens prix de cette campagne et réinsérer
-      const oldRules = await priceCollection.query().fetch()
-      for (const rule of oldRules) {
-        await rule.destroyPermanently()
-      }
+      // 3. Mettre à jour les prix de la campagne
+      await db.runAsync('DELETE FROM price_rules');
 
       for (const rule of campaign.priceRules) {
-        await priceCollection.create((record) => {
-          record.serverId = rule.id
-          record.campaignId = campaign.id
-          record.campaignName = campaign.name
-          record.culture = rule.culture
-          record.qualityGrade = rule.qualityGrade
-          record.pricePerKg = rule.pricePerKg
-          record.effectiveFrom = new Date(rule.effectiveFrom)
-        })
+        await db.runAsync(
+          `INSERT INTO price_rules (id, campaign_id, campaign_name, culture, quality_grade, price_per_kg, effective_from)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [rule.id, campaign.id, campaign.name, rule.culture, rule.qualityGrade, rule.pricePerKg, rule.effectiveFrom.toString()]
+        );
       }
     }
-  })
+  });
 }
 
 // ─── Push : Envoyer les livraisons non synchronisées au serveur ──────────────
 
-export async function pushToServer(): Promise<{
-  pushed: number
-  errors: number
-}> {
-  const deviceId = await getOrCreateDeviceId()
-  const deliveryCollection = database.get<Delivery>('deliveries')
+export async function pushToServer(): Promise<{ pushed: number; errors: number }> {
+  const deviceId = await getOrCreateDeviceId();
 
   // Récupérer toutes les livraisons non synchronisées
-  const pending = await deliveryCollection
-    .query()
-    .fetch()
-    .then((all) => all.filter((d) => !d.isSynced))
+  const pending: SQLiteDelivery[] = await db.getAllAsync(
+    'SELECT * FROM deliveries WHERE is_synced = 0'
+  );
 
-  if (pending.length === 0) return { pushed: 0, errors: 0 }
+  if (pending.length === 0) return { pushed: 0, errors: 0 };
 
   const payload = pending.map((d) => ({
-    offlineUuid: d.offlineUuid,
+    offlineUuid: d.offline_uuid,
     deviceId,
-    campaignId: d.campaignId,
-    producerId: d.producerId,
+    campaignId: d.campaign_id,
+    producerId: d.producer_id,
     culture: d.culture,
-    quantityKg: d.quantityKg,
-    qualityGrade: d.qualityGrade,
-    photoUrl: d.photoUrl ?? undefined,
-    notes: d.notes ?? undefined,
-    createdOfflineAt: d.createdOfflineAt.toISOString(),
-  }))
+    quantityKg: d.quantity_kg,
+    qualityGrade: d.quality_grade as any,
+    photoUrl: d.photo_url || undefined,
+    notes: d.notes || undefined,
+    pricePerKg: d.price_per_kg,
+    calculatedAmount: d.calculated_amount,
+    createdOfflineAt: d.created_offline_at,
+  }));
 
-  const result = await syncDeliveries(payload)
+  try {
+    const result = await trpcClient.deliveries.sync.mutate({ deliveries: payload });
 
-  // Mettre à jour le statut de chaque livraison selon la réponse serveur
-  await database.write(async () => {
-    for (const res of result.results) {
-      const delivery = pending.find((d) => d.offlineUuid === res.offlineUuid)
-      if (!delivery) continue
-
-      await delivery.update((record) => {
+    // Mettre à jour le statut de chaque livraison
+    await db.withTransactionAsync(async () => {
+      for (const res of result.results) {
         if (res.status === 'created' || res.status === 'duplicate') {
-          record.isSynced = true
-          record.syncError = null
+          await db.runAsync(
+            'UPDATE deliveries SET is_synced = 1, sync_error = NULL WHERE offline_uuid = ?',
+            [res.offlineUuid]
+          );
         } else {
-          record.syncError = res.error ?? 'Erreur inconnue'
+          await db.runAsync(
+            'UPDATE deliveries SET sync_error = ? WHERE offline_uuid = ?',
+            [res.error || 'Erreur inconnue', res.offlineUuid]
+          );
         }
-      })
-    }
-  })
+      }
+    });
 
-  return {
-    pushed: result.created,
-    errors: result.errors,
+    return {
+      pushed: result.created,
+      errors: result.errors,
+    };
+  } catch (error) {
+    console.error('[Sync] Erreur fatale lors du push tRPC:', error);
+    return { pushed: 0, errors: pending.length };
   }
 }
 
 // ─── Sync complète (pull + push) ─────────────────────────────────────────────
 
 export async function fullSync(gicId: string): Promise<{ pushed: number; errors: number }> {
-  await pullFromServer(gicId)
-  return pushToServer()
+  await pullFromServer(gicId);
+  return pushToServer();
 }
 
 // ─── Compter les livraisons en attente ───────────────────────────────────────
 
 export async function countPendingDeliveries(): Promise<number> {
-  const all = await database.get<Delivery>('deliveries').query().fetch()
-  return all.filter((d) => !d.isSynced).length
+  const result: any = await db.getFirstAsync(
+    'SELECT COUNT(*) as count FROM deliveries WHERE is_synced = 0'
+  );
+  return result?.count || 0;
 }

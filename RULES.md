@@ -17,12 +17,15 @@
   - Versioning: All APIs under `/api/v1/...`.
   - Idempotency: `offlineUuid` from mobile is mandatory for delivery creation to prevent duplicates during retry-on-reconnect.
 - **State Management**:
-  - Web: TanStack Query for server state.
-  - Mobile: Local SQLite (via Expo/Prisma) for offline-first persistence.
+  - Web: TanStack Query (React Query) for server state handling.
+  - Mobile: **expo-sqlite** for persistent offline data.
+- **Communication (API)**:
+  - **tRPC**: Use tRPC for end-to-end type safety between backend and clients.
+  - **Zod**: Mandatory for all request/response validation schemas.
 - **Security**:
-  - Use Argon2/Bcrypt for passwords.
-  - Collector auth is via 4-digit PIN + Device ID binding.
-  - Managers use Email/Password + JWT (Short-lived) & Refresh Tokens.
+  - Use Argon2 or Bcrypt for password hashing.
+  - Collector auth: PIN + Device ID binding.
+  - Manager auth: Email/Password + JWT & Refresh Tokens.
 
 ## 3. Deployment & CI/CD
 - **Environment**: Strict separation of `development`, `staging`, and `production`.

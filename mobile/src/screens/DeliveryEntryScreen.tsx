@@ -14,7 +14,7 @@ import {
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import * as ImagePicker from 'expo-image-picker'
-import { database, Delivery, PriceRule } from '../db/database'
+import { db, SQLitePriceRule } from '../db/database'
 
 const { width } = Dimensions.get('window')
 
@@ -56,21 +56,28 @@ export default function DeliveryEntryScreen({
   }, [quality])
 
   async function loadCultures() {
-    const rules = await database.get<PriceRule>('price_rules').query().fetch()
-    const activeRules = rules.filter(r => r.campaignId === campaignId && r.qualityGrade === quality)
+    // Récupérer les règles de prix filtrées par campagne et qualité
+    const activeRules: SQLitePriceRule[] = await db.getAllAsync(
+      'SELECT * FROM price_rules WHERE campaign_id = ? AND quality_grade = ?',
+      [campaignId, quality]
+    );
+
     const uniqueCultures = [...new Set(activeRules.map(r => r.culture))]
     setCultures(uniqueCultures)
 
     if (!culture && uniqueCultures.length > 0) setCulture(uniqueCultures[0])
     const rule = activeRules.find(r => r.culture === (culture || uniqueCultures[0]))
-    setPricePerKg(rule?.pricePerKg ?? null)
+    setPricePerKg(rule?.price_per_kg ?? null)
   }
 
   useEffect(() => {
     if (culture) {
-      database.get<PriceRule>('price_rules').query().fetch().then(rules => {
-        const rule = rules.find(r => r.campaignId === campaignId && r.culture === culture && r.qualityGrade === quality)
-        setPricePerKg(rule?.pricePerKg ?? null)
+      db.getAllAsync(
+        'SELECT * FROM price_rules WHERE campaign_id = ? AND culture = ? AND quality_grade = ?',
+        [campaignId, culture, quality]
+      ).then((rules: any[]) => {
+        const rule = rules[0];
+        setPricePerKg(rule?.price_per_kg ?? null)
       })
     }
   }, [culture, quality])
@@ -93,6 +100,11 @@ export default function DeliveryEntryScreen({
       Alert.alert('Saisie invalide', 'Entrez une quantité valide.')
       return
     }
+    if (!pricePerKg) {
+      Alert.alert('Erreur', 'Prix non défini pour ce produit.')
+      return
+    }
+
     setSaving(true)
     try {
       const offlineUuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
@@ -100,25 +112,32 @@ export default function DeliveryEntryScreen({
         return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16)
       })
 
-      await database.write(async () => {
-        await database.get<Delivery>('deliveries').create((record) => {
-          record.offlineUuid = offlineUuid
-          record.campaignId = campaignId
-          record.producerId = producer.id
-          record.culture = culture
-          record.quantityKg = qty
-          record.qualityGrade = quality
-          record.pricePerKg = pricePerKg!
-          record.calculatedAmount = total
-          record.photoUrl = photo
-          record.createdOfflineAt = new Date()
-          record.isSynced = false
-        })
-      })
+      await db.runAsync(
+        `INSERT INTO deliveries (
+          offline_uuid, campaign_id, producer_id, culture, quantity_kg, 
+          quality_grade, photo_url, notes, price_per_kg, calculated_amount, 
+          net_due, created_offline_at, is_synced
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+        [
+          offlineUuid,
+          campaignId,
+          producer.id,
+          culture,
+          qty,
+          quality,
+          photo,
+          null, // notes
+          pricePerKg,
+          total,
+          total, // net_due (pas d'avance ici pour simplifier)
+          new Date().toISOString(),
+        ]
+      );
 
       Alert.alert('Succès ✓', `Pesée enregistrée pour ${producer.fullName}`, [{ text: 'OK', onPress: onConfirm }])
     } catch (err) {
-      Alert.alert('Erreur', 'Impossible d\'enregistrer.')
+      console.error('[SQLite] Erreur de sauvegarde:', err);
+      Alert.alert('Erreur', 'Impossible d''enregistrer dans la base locale.')
     } finally {
       setSaving(false)
     }

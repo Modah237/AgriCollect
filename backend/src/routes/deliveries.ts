@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 import { authenticate } from '../middleware/auth'
 import { validate } from '../middleware/validate'
+import { logger } from '../lib/logger'
 
 const router = Router()
 
@@ -37,9 +38,9 @@ router.post('/sync', authenticate, validate(syncSchema), async (req: Request, re
   const collectorId = req.user!.userId
   const gicId = req.user!.gicId
 
-  const results: Array<{ 
-    offlineUuid: string; 
-    status: 'created' | 'duplicate' | 'error'; 
+  const results: Array<{
+    offlineUuid: string;
+    status: 'created' | 'duplicate' | 'error';
     error?: string;
     advanceDeducted?: number;
     netDue?: number;
@@ -84,11 +85,11 @@ router.post('/sync', authenticate, validate(syncSchema), async (req: Request, re
       }
 
       const calculatedAmount = Math.round(Number(delivery.quantityKg) * priceRule.pricePerKg)
-      
+
       // Trouver les avances non remboursées (FIFO)
       const advances = await prisma.advance.findMany({
-        where: { 
-          producerId: delivery.producerId, 
+        where: {
+          producerId: delivery.producerId,
           campaignId: delivery.campaignId,
           repaidAmount: { lt: prisma.advance.fields.amount }
         },
@@ -96,7 +97,7 @@ router.post('/sync', authenticate, validate(syncSchema), async (req: Request, re
       })
 
       const totalAvailableAdvance = advances.reduce(
-        (sum, a) => sum + (a.amount - a.repaidAmount), 
+        (sum, a) => sum + (a.amount - a.repaidAmount),
         0
       )
 
@@ -142,28 +143,28 @@ router.post('/sync', authenticate, validate(syncSchema), async (req: Request, re
           let remainingToDeduct = advanceDeducted
           for (const adv of advances) {
             if (remainingToDeduct <= 0) break
-            
+
             const unpaidAmount = adv.amount - adv.repaidAmount
             const deduction = Math.min(unpaidAmount, remainingToDeduct)
-            
+
             await tx.advance.update({
               where: { id: adv.id },
               data: { repaidAmount: { increment: deduction } }
             })
-            
+
             remainingToDeduct -= deduction
           }
         }
       })
 
-      results.push({ 
-        offlineUuid: delivery.offlineUuid, 
+      results.push({
+        offlineUuid: delivery.offlineUuid,
         status: 'created',
         advanceDeducted,
         netDue
       })
     } catch (err) {
-      console.error('[DeliverySyncError]', err)
+      logger.error({ err, offlineUuid: delivery.offlineUuid }, 'Delivery sync transaction failed')
       results.push({ offlineUuid: delivery.offlineUuid, status: 'error', error: 'Erreur serveur lors de la transaction' })
     }
   }

@@ -1,86 +1,87 @@
-import axios from 'axios'
-import { logger } from '../lib/logger'
+import axios from 'axios';
+import { logger } from '../lib/logger';
 
-const FAPSHI_API_URL = 'https://live.fapshi.com/payout' // Fapshi direct pay endpoint
-// Usually the endpoint requires auth via headers. According to usual Fapshi docs:
-// headers: { 'apiuser': 'your-api-user-id', 'apikey': 'your-api-key' }
+const FAPSHI_API_URL = 'https://api.fapshi.com';
+const FAPSHI_USER_ID = process.env.FAPSHI_API_USER_ID;
+const FAPSHI_API_KEY = process.env.FAPSHI_API_KEY;
 
-const API_USER = process.env.FAPSHI_API_USER_ID ?? ''
-const API_KEY = process.env.FAPSHI_API_KEY ?? ''
+export interface FapshiPayoutRequest {
+  amount: number;
+  phone: string;
+  externalId: string;
+}
 
 export interface FapshiPayoutResponse {
-  statusCode: number
-  message: string
-  transId?: string
-  status?: string
+  transId: string;
+  status: 'CREATED' | 'SUCCESSFUL' | 'FAILED';
+  message?: string;
 }
 
 /**
- * Initiates a MoMo Payout to a producer
- * @param phone Phone number without country code or with depending on Fapshi formatting
- * @param amount Amount in XAF
- * @param externalId Our internal transaction ID (PaymentLine ID)
+ * Service pour les paiements via Fapshi (Paiements mobiles au Cameroun)
  */
+
 export async function sendPayout(phone: string, amount: number, externalId: string): Promise<FapshiPayoutResponse> {
-  if (!API_USER || !API_KEY) {
-    throw new Error('Fapshi API credentials not configured')
-  }
-
   try {
-    const payload = {
-      amount,
-      phone,
-      externalId,
+    if (!FAPSHI_USER_ID || !FAPSHI_API_KEY) {
+      throw new Error('Fapshi credentials missing');
     }
 
-    const response = await axios.post(`${FAPSHI_API_URL}`, payload, {
-      headers: {
-        apiuser: API_USER,
-        apikey: API_KEY,
-      },
-    })
+    const response = await axios.post(
+      `${FAPSHI_API_URL}/direct-delivery`,
+      { amount, phone, externalId },
+      {
+        headers: {
+          'apiuser': FAPSHI_USER_ID,
+          'apikey': FAPSHI_API_KEY,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
 
-    return response.data
-  } catch (error: any) {
-    logger.error({ err: error.response?.data || error.message }, 'Erreur Fapshi sendPayout')
-    if (error.response?.data) {
-      return error.response.data as FapshiPayoutResponse
-    }
-    throw new Error(`Fapshi payout failed: ${error.message}`)
+    return {
+      transId: response.data.transId,
+      status: response.data.status,
+    };
+  } catch (err: any) {
+    logger.error({ err, phone, amount }, 'Fapshi payout failed');
+    return {
+      transId: '',
+      status: 'FAILED',
+      message: err.response?.data?.message || err.message,
+    };
   }
 }
 
-/**
- * Checks the status of a specific payout transaction
- * @param transId Fapshi transaction ID
- */
-export async function getPayoutStatus(transId: string): Promise<string> {
-  if (!API_USER || !API_KEY) {
-    throw new Error('Fapshi API credentials not configured')
-  }
-
+export async function getPayoutStatus(transId: string): Promise<'CREATED' | 'SUCCESSFUL' | 'FAILED'> {
   try {
-    const response = await axios.get(`${FAPSHI_API_URL}/${transId}`, {
+    const response = await axios.get(`${FAPSHI_API_URL}/payment-status/${transId}`, {
       headers: {
-        apiuser: API_USER,
-        apikey: API_KEY,
+        'apiuser': FAPSHI_USER_ID,
+        'apikey': FAPSHI_API_KEY,
       },
-    })
+    });
 
-    // Fapshi typically returns status in string format: "SUCCESSFUL", "FAILED", "CREATED"
-    return response.data.status || 'UNKNOWN'
-  } catch (error: any) {
-    logger.error({ err: error.response?.data || error.message }, `Erreur Fapshi checkStatus pour ${transId}`)
-    throw new Error('Impossible de vérifier le statut Fapshi')
+    return response.data.status;
+  } catch (err: any) {
+    logger.error({ err, transId }, 'Fapshi status check failed');
+    throw err;
   }
 }
 
-/**
- * Verify Fapshi webhook signature
- * Fapshi's webhook validation depends on their specific header. For now, we skip or use a simple check.
- */
-export function verifyWebhookSignature(rawBody: string, signature: string): boolean {
-  // TODO: Implement Fapshi specific webhook signature validation
-  logger.info("Fapshi webhook received without strict signature verification")
-  return true
+import crypto from 'crypto';
+
+export function verifyWebhookSignature(body: string, signature: string): boolean {
+  if (!FAPSHI_API_KEY) return false;
+  
+  const hmac = crypto.createHmac('sha256', FAPSHI_API_KEY);
+  const hash = hmac.update(body).digest('hex');
+  
+  return hash === signature;
 }
+
+export const fapshiService = {
+  sendPayout,
+  getPayoutStatus,
+  verifyWebhookSignature,
+};

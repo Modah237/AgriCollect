@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import { authenticate, requireRole } from '../middleware/auth'
 import { generateCampaignPDF, ReportData } from '../services/pdfGenerator'
+import { logger } from '../lib/logger'
 
 const router = Router()
 
@@ -31,8 +32,12 @@ router.get(
       return
     }
 
-    // Utilisation de any temporairement pour contourner l'erreur de Namespace Prisma sur Vercel
-    type DeliveryWithRelations = any
+    type DeliveryWithRelations = Prisma.DeliveryGetPayload<{
+      include: {
+        producer: { select: { fullName: true; phoneMomo: true } }
+        collector: { select: { fullName: true } }
+      }
+    }>
 
     const deliveries: DeliveryWithRelations[] = await prisma.delivery.findMany({
       where: { campaignId },
@@ -131,7 +136,9 @@ router.post(
       return
     }
 
-    type DeliveryWithProducer = any
+    type DeliveryWithProducer = Prisma.DeliveryGetPayload<{
+      include: { producer: { select: { fullName: true } } }
+    }>
 
     const deliveries: DeliveryWithProducer[] = await prisma.delivery.findMany({
       where: { campaignId },
@@ -161,9 +168,8 @@ router.post(
     try {
       const pdfBuffer = await generateCampaignPDF(reportData)
 
-      const filename = `AgriCollect_${campaign.name.replace(/\s+/g, '_')}_${
-        new Date().toISOString().slice(0, 10)
-      }.pdf`
+      const filename = `AgriCollect_${campaign.name.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)
+        }.pdf`
 
       res.set({
         'Content-Type': 'application/pdf',
@@ -173,7 +179,7 @@ router.post(
 
       res.send(pdfBuffer)
     } catch (err) {
-      console.error('[Reports] Erreur génération PDF:', err)
+      logger.error({ err, campaignId }, 'PDF report generation failed')
       res.status(500).json({ error: 'Erreur lors de la génération du PDF' })
     }
   }

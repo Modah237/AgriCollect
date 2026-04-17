@@ -1,31 +1,48 @@
-FROM node:22-slim
+# ─── Stage 1: Build ──────────────────────────────────────────────────────────
+FROM node:22-slim AS builder
 
-# Dépendances Prisma
 RUN apt-get update && apt-get install -y openssl libssl-dev && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# ─── Étape 1 : Copie des manifestes et du schéma Prisma ─────────────────────
-# Le schéma est requis avant npm install à cause du script postinstall
+# Copie des manifestes et du schéma Prisma (requis pour npm install / postinstall)
 COPY package*.json ./
-COPY .npmrc ./
 COPY backend/package*.json ./backend/
 COPY backend/prisma ./backend/prisma/
 
-# ─── Étape 2 : Installation des dépendances (backend seulement) ──────────────
-# On ignore les workspaces web pour ne pas installer Next.js dans l'image backend
+# Installation des dépendances (incluant devDeps pour le build TS)
 RUN npm install --workspace=backend --include-workspace-root
 
-# ─── Étape 3 : Génération du client Prisma ───────────────────────────────────
-COPY backend/prisma ./backend/prisma/
+# Génération du client Prisma
 RUN npx prisma generate --schema=./backend/prisma/schema.prisma
 
-# ─── Étape 4 : Copie du code source et build TypeScript ──────────────────────
+# Build du code source
 COPY backend/src ./backend/src
 COPY backend/tsconfig.json ./backend/tsconfig.json
-
 RUN npm run build --workspace=backend
 
-# ─── Étape 5 : Démarrage ─────────────────────────────────────────────────────
+# ─── Stage 2: Runtime ────────────────────────────────────────────────────────
+FROM node:22-slim AS runner
+
+RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# On ne copie que ce qui est nécessaire pour l'exécution
+COPY package.json ./
+COPY backend/package.json ./backend/
+COPY backend/prisma ./backend/prisma/
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/backend/node_modules ./backend/node_modules
+COPY --from=builder /app/backend/dist ./backend/dist
+
+# Variables d'environnement par défaut
+ENV NODE_ENV=production
+ENV PORT=3001
+
+EXPOSE 3001
+
+# L'utilisateur node est plus sécurisé
+USER node
 
 CMD ["node", "backend/dist/index.js"]

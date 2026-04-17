@@ -7,6 +7,7 @@ import { validate } from '../middleware/validate'
 import { getPaymentQueue } from '../queues/paymentQueue'
 import { verifyWebhookSignature } from '../services/fapshi'
 import { sendPaymentConfirmation, sendPaymentFailure } from '../services/sms'
+import { logger } from '../lib/logger'
 
 export const paymentsRouter = Router()
 
@@ -100,7 +101,7 @@ paymentsRouter.post(
         message: 'Batch créé, paiements en cours de traitement',
       })
     } catch (err: any) {
-      console.error('POST /payments/batches error:', err)
+      logger.error({ err, campaignId, producerIds }, 'Failed to create payment batch')
       res.status(500).json({ error: 'Internal server error' })
     }
   }
@@ -196,7 +197,7 @@ paymentsRouter.post(
 
     // Fapshi might use externalId instead of external_reference
     const extRef = external_reference || externalId
-    
+
     if (!extRef || !status) {
       res.status(400).json({ error: 'Missing fields' })
       return
@@ -247,7 +248,7 @@ paymentsRouter.post(
 
       res.json({ received: true })
     } catch (err) {
-      console.error('Campay webhook error:', err)
+      logger.error({ err, body: req.body }, 'Fapshi webhook processing failed')
       res.status(500).json({ error: 'Internal server error' })
     }
   }

@@ -5,14 +5,7 @@ import cors from 'cors'
 import rateLimit from 'express-rate-limit'
 
 import { logger } from './lib/logger'
-import authRoutes from './routes/auth'
-import gicRoutes from './routes/gic'
-import producerRoutes from './routes/producers'
-import campaignRoutes from './routes/campaigns'
-import deliveryRoutes from './routes/deliveries'
-import { paymentsRouter } from './routes/payments'
-import reportsRouter from './routes/reports'
-import exportsRouter from './routes/exports'
+// REST routes removed in favor of tRPC
 
 // ─── Sentry (monitoring erreurs) ───────────────────────────────────────────────
 
@@ -33,13 +26,13 @@ const PORT = process.env.PORT ?? 3001
 app.use(helmet())
 
 const allowedOrigins = (
-  process.env.CORS_ORIGIN ?? 'http://localhost:3000,http://localhost:8081,http://localhost:8084'
+  process.env.CORS_ORIGIN ?? 'http://localhost:3000,http://localhost:8081,http://localhost:8084,https://agricollectbackend-production.up.railway.app'
 ).split(',')
 
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
         callback(null, true)
       } else {
         callback(new Error('Non autorisé par CORS'))
@@ -81,16 +74,22 @@ app.get('/', (_req, res) => {
   res.json({ message: 'AgriCollect CM API is running!', status: 'ok' })
 })
 
-// ─── Routes ────────────────────────────────────────────────────────────────────
+import * as trpcExpress from '@trpc/server/adapters/express'
+import { appRouter } from './trpc/routers/_app'
+import { createContext } from './trpc/context'
 
-app.use('/auth', authLimiter, authRoutes)
-app.use('/gic', gicRoutes)
-app.use('/producers', producerRoutes)
-app.use('/campaigns', campaignRoutes)
-app.use('/deliveries', deliveryRoutes)
-app.use('/payments', paymentsRouter)
-app.use('/reports', reportsRouter)
-app.use('/exports', exportsRouter)
+// ─── tRPC Endpoint ─────────────────────────────────────────────────────────────
+app.use(
+  '/api/trpc',
+  trpcExpress.createExpressMiddleware({
+    router: appRouter,
+    createContext,
+  })
+)
+
+// Webhook Fapshi (URL directe) — doit rester en REST car Fapshi envoie un POST brut
+import { paymentsRouter as legacyPaymentsRouter } from './routes/payments'
+app.use('/api/v1/payments/webhook/fapshi', legacyPaymentsRouter)
 
 // ─── Gestion d'erreurs globale ─────────────────────────────────────────────────
 
@@ -104,13 +103,10 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
 
 const port = Number(PORT) || 3001
 
-// Vercel handles the server listening automatically.
-// We only start the listener if we are NOT running on Vercel.
 if (!process.env.VERCEL) {
   app.listen(port, '0.0.0.0', () => {
     logger.info(`AgriCollect CM API — port ${port} — ${process.env.NODE_ENV ?? 'development'} (0.0.0.0)`)
   
-    // Worker BullMQ (si Redis disponible)
     process.nextTick(async () => {
       try {
         const { getRedisConnection } = await import('./queues/paymentQueue')

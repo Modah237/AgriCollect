@@ -11,7 +11,7 @@ import {
 } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import NumPad from '../components/NumPad'
-import { loginCollector } from '../services/api'
+import { trpc } from '../lib/trpc'
 import {
   saveTokens,
   saveUser,
@@ -20,16 +20,28 @@ import {
   getGicId,
 } from '../stores/authStore'
 
-const { width } = Dimensions.get('window')
 const PIN_LENGTH = 4
 const DEFAULT_GIC_ID = process.env.EXPO_PUBLIC_GIC_ID ?? ''
-
-export default function LoginScreen({ onLoginSuccess }: { onLoginSuccess: () => void }) {
   const [pin, setPin] = useState('')
-  const [loading, setLoading] = useState(false)
   const [gicId, setGicId] = useState(DEFAULT_GIC_ID)
   
-  // Animation du shake pour erreur PIN
+  const loginMutation = trpc.auth.loginCollector.useMutation({
+    onSuccess: async (result) => {
+      await Promise.all([
+        saveTokens(result.accessToken, result.refreshToken),
+        saveUser(result.user),
+        saveGicId(gicId),
+      ]);
+      onLoginSuccess();
+    },
+    onError: (err) => {
+      shake();
+      const msg = err.message === 'PIN incorrect' ? 'PIN incorrect' : 'Erreur de connexion';
+      Alert.alert('Accès refusé', msg);
+      setPin('');
+    }
+  });
+
   const shakeAnim = useRef(new Animated.Value(0)).current
 
   useEffect(() => {
@@ -58,26 +70,8 @@ export default function LoginScreen({ onLoginSuccess }: { onLoginSuccess: () => 
       return
     }
 
-    setLoading(true)
-    try {
-      const deviceId = await getOrCreateDeviceId()
-      const result = await loginCollector(gicId, deviceId, pin)
-
-      await Promise.all([
-        saveTokens(result.accessToken, result.refreshToken),
-        saveUser(result.user),
-        saveGicId(gicId),
-      ])
-
-      onLoginSuccess()
-    } catch (err: any) {
-      shake() // Animation visuelle de l'échec
-      const msg = err.message === 'PIN incorrect' ? 'PIN incorrect' : 'Erreur de connexion'
-      Alert.alert('Accès refusé', msg)
-      setPin('')
-    } finally {
-      setLoading(false)
-    }
+    const deviceId = await getOrCreateDeviceId()
+    loginMutation.mutate({ gicId, deviceId, pin })
   }
 
   const dots = Array.from({ length: PIN_LENGTH }, (_, i) => i < pin.length)
@@ -113,14 +107,14 @@ export default function LoginScreen({ onLoginSuccess }: { onLoginSuccess: () => 
 
           {/* NumPad translucide */}
           <View style={styles.bottomSection}>
-            {loading ? (
+            {loginMutation.isPending ? (
               <ActivityIndicator size="large" color="#FFFFFF" />
             ) : (
               <NumPad 
                 value={pin} 
                 onChange={setPin} 
                 maxLength={PIN_LENGTH} 
-                variant="transparent" // J'ajouterai ce variant au composant
+                variant="transparent" 
               />
             )}
           </View>
