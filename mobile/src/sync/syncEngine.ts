@@ -67,8 +67,6 @@ export async function pushToServer(): Promise<{ pushed: number; errors: number }
     qualityGrade: d.quality_grade as any,
     photoUrl: d.photo_url || undefined,
     notes: d.notes || undefined,
-    pricePerKg: d.price_per_kg,
-    calculatedAmount: d.calculated_amount,
     createdOfflineAt: d.created_offline_at,
   }));
 
@@ -93,7 +91,7 @@ export async function pushToServer(): Promise<{ pushed: number; errors: number }
     });
 
     return {
-      pushed: result.created,
+      pushed: result.created + result.duplicates,
       errors: result.errors,
     };
   } catch (error) {

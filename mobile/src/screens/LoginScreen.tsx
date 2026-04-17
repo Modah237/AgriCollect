@@ -22,6 +22,8 @@ import {
 
 const PIN_LENGTH = 4
 const DEFAULT_GIC_ID = process.env.EXPO_PUBLIC_GIC_ID ?? ''
+
+export default function LoginScreen({ onLoginSuccess }: { onLoginSuccess: () => void }) {
   const [pin, setPin] = useState('')
   const [gicId, setGicId] = useState(DEFAULT_GIC_ID)
   

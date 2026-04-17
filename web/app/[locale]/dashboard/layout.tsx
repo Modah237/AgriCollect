@@ -21,10 +21,10 @@ export default function DashboardLayout({
 
   const navItems = [
     { href: `/${locale}/dashboard`, label: dict.common.dashboard, icon: '📊' },
-    { href: `/${locale}/dashboard/deliveries`, label: dict.dashboard.stats.totalDeliveries, icon: '📦' },
-    { href: `/${locale}/dashboard/producers`, label: dict.dashboard.stats.activeProducers, icon: '👨‍🌾' },
-    { href: `/${locale}/dashboard/payments`, label: 'Paiements', icon: '💰' },
-    { href: `/${locale}/dashboard/campaigns`, label: 'Campagnes', icon: '📅' },
+    { href: `/${locale}/dashboard/deliveries`, label: dict.dashboard.stats.deliveries, icon: '📦' },
+    { href: `/${locale}/dashboard/producers`, label: dict.dashboard.stats.producers, icon: '👨‍🌾' },
+    { href: `/${locale}/dashboard/payments`, label: dict.dashboard.stats.payments, icon: '💰' },
+    { href: `/${locale}/dashboard/campaigns`, label: dict.dashboard.stats.campaigns, icon: '📅' },
   ]
 
   // Note: Localisation des labels spécifiques du dashboard si nécessaire
@@ -62,8 +62,8 @@ export default function DashboardLayout({
                 key={item.href}
                 href={item.href}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${isActive
-                    ? 'bg-green-700 text-white'
-                    : 'text-green-200 hover:bg-green-800 hover:text-white'
+                  ? 'bg-green-700 text-white'
+                  : 'text-green-200 hover:bg-green-800 hover:text-white'
                   }`}
               >
                 <span>{item.icon}</span>

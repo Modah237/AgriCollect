@@ -88,8 +88,9 @@ app.use(
 )
 
 // Webhook Fapshi (URL directe) — doit rester en REST car Fapshi envoie un POST brut
-import { fapshiWebhook } from './webhooks/fapshi'
-app.use('/api/v1/payments/webhook/fapshi', fapshiWebhook)
+import { fapshiWebhook } from './webhooks/fapshi';
+
+app.use('/api/v1/payments/webhook/fapshi', fapshiWebhook);
 
 // ─── Gestion d'erreurs globale ─────────────────────────────────────────────────
 
@@ -106,7 +107,7 @@ const port = Number(PORT) || 3001
 if (!process.env.VERCEL) {
   app.listen(port, '0.0.0.0', () => {
     logger.info(`AgriCollect CM API — port ${port} — ${process.env.NODE_ENV ?? 'development'} (0.0.0.0)`)
-  
+
     process.nextTick(async () => {
       try {
         const { getRedisConnection } = await import('./queues/paymentQueue')

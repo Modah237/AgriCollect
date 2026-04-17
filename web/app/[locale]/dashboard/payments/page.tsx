@@ -16,33 +16,61 @@ const LINE_COLORS: Record<string, string> = {
   FAILED: 'bg-red-100 text-red-700',
 }
 
-export default function PaymentsPage() {
+interface PaymentBatch {
+  id: string
+  totalAmount: number
+  status: string
+  createdAt: string
+  initiatedBy: { fullName: string }
+  _count: { lines: number }
+}
+
+interface BatchLine {
+  id: string
+  amount: number
+  status: string
+  producer: { fullName: string; phoneMomo: string }
+}
+
+interface BatchDetail extends PaymentBatch {
+  stats: { confirmed: number; failed: number; submitted: number }
+  lines: BatchLine[]
+}
+
+interface Producer {
+  id: string
+  fullName: string
+}
+
+export default function PaymentsPage({ params }: { params: Promise<{ locale: string }> }) {
+  const { locale } = use(params) as { locale: Locale }
+  const dict = getDictionary(locale)
   const user = getUser()
   const utils = trpc.useUtils()
-  const [selectedBatch, setSelectedBatch] = useState<string | null>(null)
-  const [launching, setLaunching] = useState(false)
+  const [selectedBatch, setSelectedBatch] = useState<string | null>(null) // State for selected batch
+  const [launching, setLaunching] = useState(false) // State for payment launch loading
 
-  const { data: campaign } = trpc.gic.getActiveCampaign.useQuery({ 
-    gicId: user?.gicId ?? '' 
+  const { data: campaign } = trpc.gic.getActiveCampaign.useQuery({
+    gicId: user?.gicId ?? ''
   }, {
     enabled: !!user?.gicId,
   })
 
-  const { data: producers } = trpc.gic.getProducers.useQuery({ 
-    gicId: user?.gicId ?? '' 
+  const { data: producers } = trpc.gic.getProducers.useQuery({
+    gicId: user?.gicId ?? ''
   }, {
     enabled: !!user?.gicId,
   })
 
-  const { data: batches, isLoading } = trpc.payments.getBatches.useQuery({ 
-    campaignId: campaign?.id 
+  const { data: batches, isLoading } = trpc.payments.getBatches.useQuery({
+    campaignId: campaign?.id
   }, {
     enabled: !!campaign?.id,
-    refetchInterval: 10000, 
+    refetchInterval: 10000,
   })
 
-  const { data: batchDetail } = trpc.payments.getBatchDetails.useQuery({ 
-    batchId: selectedBatch ?? '' 
+  const { data: batchDetail } = trpc.payments.getBatchDetails.useQuery({
+    batchId: selectedBatch ?? ''
   }, {
     enabled: !!selectedBatch,
     refetchInterval: selectedBatch ? 5000 : false,
@@ -52,17 +80,18 @@ export default function PaymentsPage() {
     onSuccess: () => {
       utils.payments.getBatches.invalidate()
       setLaunching(false)
-      alert('Paiement lancé avec succès !')
+      // Consider using a more robust notification system (e.g., toast) instead of alert
+      console.log(dict.dashboard.payments.launchingSuccess)
     },
     onError: (err) => {
-      alert(err.message || 'Erreur lors du lancement')
+      console.error(err.message || dict.common.error)
       setLaunching(false)
     },
   })
 
   function handleLaunch() {
     if (!campaign?.id || !producers?.length) return
-    if (!confirm(`Lancer le paiement pour ${producers.length} producteurs ?`)) return
+    if (!confirm(dict.dashboard.payments.confirmLaunch.replace('{count}', String(producers.length)))) return
     setLaunching(true)
     launchMutation.mutate()
   }
@@ -70,13 +99,13 @@ export default function PaymentsPage() {
   return (
     <div className="p-8">
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">💰 Paiements</h2>
+        <h2 className="text-2xl font-bold text-gray-900">💰 {dict.dashboard.payments.title}</h2>
         <button
           onClick={handleLaunch}
           disabled={!campaign?.id || !producers?.length || launching}
           className="bg-green-700 hover:bg-green-800 disabled:bg-gray-300 text-white px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors"
         >
-          {launching ? '⏳ Lancement...' : '🚀 Payer tous les producteurs'}
+          {launching ? `⏳ ${dict.dashboard.payments.launching}` : `🚀 ${dict.dashboard.payments.payAll}`}
         </button>
       </div>
 
@@ -84,16 +113,16 @@ export default function PaymentsPage() {
         {/* Liste des batches */}
         <div className="bg-white rounded-xl shadow-sm overflow-hidden">
           <div className="p-4 border-b bg-gray-50">
-            <h3 className="font-semibold text-gray-700">Historique des paiements</h3>
+            <h3 className="font-semibold text-gray-700">{dict.dashboard.payments.history}</h3>
           </div>
 
           {isLoading ? (
-            <div className="p-8 text-center text-gray-400">Chargement...</div>
+            <div className="p-8 text-center text-gray-400">{dict.common.loading}</div>
           ) : !batches?.length ? (
-            <div className="p-8 text-center text-gray-400">Aucun paiement initié</div>
+            <div className="p-8 text-center text-gray-400">{dict.dashboard.payments.noBatches}</div>
           ) : (
             <div className="divide-y">
-              {batches.map((b: any) => (
+              {batches.map((b: PaymentBatch) => (
                 <button
                   key={b.id}
                   onClick={() => setSelectedBatch(b.id)}
@@ -104,7 +133,7 @@ export default function PaymentsPage() {
                     <div>
                       <p className="font-medium text-sm">{Number(b.totalAmount).toLocaleString('fr-FR')} XAF</p>
                       <p className="text-xs text-gray-400 mt-0.5">
-                        {b._count?.lines ?? 0} producteurs · {new Date(b.createdAt).toLocaleDateString('fr-FR')}
+                        {b._count?.lines ?? 0} {dict.dashboard.stats.producers.toLowerCase()} · {new Date(b.createdAt).toLocaleDateString(locale === 'fr' ? 'fr-FR' : 'en-US')}
                       </p>
                       <p className="text-xs text-gray-400">par {b.initiatedBy?.fullName}</p>
                     </div>
@@ -122,15 +151,15 @@ export default function PaymentsPage() {
         {selectedBatch && batchDetail && (
           <div className="bg-white rounded-xl shadow-sm overflow-hidden">
             <div className="p-4 border-b bg-gray-50 flex items-center justify-between">
-              <h3 className="font-semibold text-gray-700">Détail du batch</h3>
+              <h3 className="font-semibold text-gray-700">{dict.dashboard.payments.detail}</h3>
               <div className="flex gap-2 text-xs">
-                <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded-full">{batchDetail.stats?.confirmed} confirmés</span>
-                <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded-full">{batchDetail.stats?.failed} échoués</span>
-                <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{batchDetail.stats?.submitted} en attente</span>
+                <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded-full">{batchDetail.stats?.confirmed} {dict.dashboard.payments.stats.confirmed}</span>
+                <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded-full">{batchDetail.stats?.failed} {dict.dashboard.payments.stats.failed}</span>
+                <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{batchDetail.stats?.submitted} {dict.dashboard.payments.stats.pending}</span>
               </div>
             </div>
             <div className="divide-y max-h-96 overflow-y-auto">
-              {batchDetail.lines?.map((l: any) => (
+              {batchDetail.lines?.map((l: BatchLine) => (
                 <div key={l.id} className="px-4 py-3 flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium">{l.producer?.fullName}</p>

@@ -15,6 +15,7 @@ export const dictionaries = {
       delete: 'Supprimer',
       actions: 'Actions',
       status: 'Statut',
+      all: 'Tout',
       date: 'Date',
     },
     auth: {
@@ -33,9 +34,26 @@ export const dictionaries = {
         campaigns: 'Campagnes Actives',
         netDue: 'Net à payer',
         volumeTotal: 'Volume Total',
+        deliveries: 'Livraisons',
+        producers: 'Producteurs',
+        payments: 'Paiements',
       },
       recentActivity: 'Activité Récente',
       noActivity: 'Aucune activité récente',
+      payments: {
+        title: 'Paiements Mobile Money',
+        payAll: 'Initier le paiement groupé',
+        launching: 'Traitement...',
+        history: 'Historique des batches',
+        noBatches: 'Aucun batch de paiement trouvé',
+        detail: 'Détail du batch',
+        confirmLaunch: 'Voulez-vous lancer le paiement pour {count} producteurs ?',
+        stats: {
+          confirmed: 'confirmés',
+          failed: 'échoués',
+          pending: 'en attente',
+        }
+      },
       sections: {
         overview: 'Aperçu',
         recentDeliveries: 'Livraisons Récentes',
@@ -65,6 +83,7 @@ export const dictionaries = {
       delete: 'Delete',
       actions: 'Actions',
       status: 'Status',
+      all: 'All',
       date: 'Date',
     },
     auth: {
@@ -83,9 +102,26 @@ export const dictionaries = {
         campaigns: 'Active Campaigns',
         netDue: 'Net Due',
         volumeTotal: 'Total Volume',
+        deliveries: 'Deliveries',
+        producers: 'Producers',
+        payments: 'Payments',
       },
       recentActivity: 'Recent Activity',
       noActivity: 'No recent activity',
+      payments: {
+        title: 'Mobile Money Payments',
+        payAll: 'Initiate bulk payment',
+        launching: 'Processing...',
+        history: 'Batch history',
+        noBatches: 'No payment batches found',
+        detail: 'Batch detail',
+        confirmLaunch: 'Launch payment for {count} producers?',
+        stats: {
+          confirmed: 'confirmed',
+          failed: 'failed',
+          pending: 'pending',
+        }
+      },
       sections: {
         overview: 'Overview',
         recentDeliveries: 'Recent Deliveries',

@@ -11,6 +11,7 @@ import {
   StatusBar,
   ActivityIndicator,
 } from 'react-native';
+import * as Crypto from 'expo-crypto';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { db, SQLitePriceRule } from '../db/database';
@@ -26,6 +27,14 @@ interface DeliveryEntryScreenProps {
   onConfirm: () => void;
   onBack: () => void;
   campaignId: string;
+}
+
+interface QualityGradeOption {
+  value: 'A' | 'B' | 'C';
+  label: string;
+  sub: string;
+  color: string;
+  icon: 'ribbon-outline' | 'medal-outline' | 'alert-circle-outline';
 }
 
 const QUALITY_GRADES = [
@@ -72,14 +81,14 @@ export default function DeliveryEntryScreen({
         'SELECT * FROM price_rules WHERE campaign_id = ? AND culture = ? AND quality_grade = ?',
         [campaignId, culture, quality]
       ).then((rules: any[]) => {
-        const rule = rules[0];
+        const rule = rules[0] as SQLitePriceRule | undefined; // Type assertion
         setPricePerKg(rule?.price_per_kg ?? null);
       });
     }
   }, [culture, quality]);
 
   const qty = parseFloat(quantity) || 0;
-  const total = pricePerKg ? Math.round(qty * pricePerKg) : 0;
+  const total = pricePerKg ? Math.round(qty * pricePerKg) : 0; // Monetary values are Int (XAF)
 
   async function takePhoto() {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
@@ -103,10 +112,7 @@ export default function DeliveryEntryScreen({
 
     setSaving(true);
     try {
-      const offlineUuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-        const r = (Math.random() * 16) | 0;
-        return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
-      });
+      const offlineUuid = Crypto.randomUUID(); // Use expo-crypto for robust UUID generation
 
       await db.runAsync(
         `INSERT INTO deliveries (
@@ -130,11 +136,11 @@ export default function DeliveryEntryScreen({
         ]
       );
 
-      Alert.alert('Succès ✓', `Pesée enregistrée pour ${producer.fullName}`, [{ text: 'OK', onPress: onConfirm }]);
+      Alert.alert('Succès ✓', `Pesée enregistrée pour ${producer.fullName}`, [{ text: 'OK', onPress: onConfirm }]); // TODO: Internationalize
     } catch (err) {
       console.error('[SQLite] Erreur de sauvegarde:', err);
-      Alert.alert('Erreur', 'Impossible d\'enregistrer dans la base locale.');
-    } finally {
+      Alert.alert('Erreur', 'Impossible d\'enregistrer dans la base locale.'); // TODO: Internationalize
+    } finally { // TODO: Internationalize all Alert messages
       setSaving(false);
     }
   }
@@ -147,19 +153,19 @@ export default function DeliveryEntryScreen({
         <View className="flex-row items-center justify-between mb-6">
           <TouchableOpacity onPress={onBack} className="w-11 h-11 rounded-full bg-white items-center justify-center shadow-sm">
             <Ionicons name="chevron-back" size={24} color="#2D6A27" />
-          </TouchableOpacity>
+          </TouchableOpacity> {/* TODO: Internationalize */}
           <View className="bg-amber-400 px-3 py-1 rounded-md">
-            <Text className="text-[10px] font-black text-green-950">NOUVELLE PESÉE</Text>
+            <Text className="text-[10px] font-black text-green-950">NOUVELLE PESÉE</Text> {/* TODO: Internationalize */}
           </View>
         </View>
 
         {/* Producer Info */}
         <View className="flex-row items-center bg-white p-4 rounded-2xl mb-6 shadow-sm">
           <View className="w-12 h-12 rounded-full bg-green-700 items-center justify-center mr-4">
-            <Ionicons name="person" size={24} color="#FFFFFF" />
+            <Ionicons name="person" size={24} color="#FFFFFF" /> {/* TODO: Internationalize */}
           </View>
           <View>
-            <Text className="text-lg font-extrabold text-slate-900">{producer.fullName}</Text>
+            <Text className="text-lg font-extrabold text-slate-900">{producer.fullName}</Text> {/* TODO: Internationalize */}
             <Text className="text-sm text-slate-500 font-medium">{producer.phoneMomo}</Text>
           </View>
         </View>
@@ -168,9 +174,9 @@ export default function DeliveryEntryScreen({
         <Text className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-3">1. Choisir le produit</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-6">
           {cultures.map(c => (
-            <TouchableOpacity 
-              key={c} 
-              onPress={() => setCulture(c)} 
+            <TouchableOpacity
+              key={c}
+              onPress={() => setCulture(c)}
               className={`px-5 py-3 rounded-full mr-2 border ${culture === c ? 'bg-green-700 border-green-700' : 'bg-white border-slate-200 shadow-sm'}`}
             >
               <Text className={`text-sm font-bold ${culture === c ? 'text-white' : 'text-slate-600'}`}>{c.toUpperCase()}</Text>
@@ -179,13 +185,13 @@ export default function DeliveryEntryScreen({
         </ScrollView>
 
         {/* Section 2: Quality Selection */}
-        <Text className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-3">2. Qualité du lot</Text>
+        <Text className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-3">2. Qualité du lot</Text> {/* TODO: Internationalize */}
         <View className="gap-3 mb-6">
-          {QUALITY_GRADES.map(g => (
-            <TouchableOpacity 
-              key={g.value} 
-              onPress={() => setQuality(g.value)} 
-              className={`flex-row items-center bg-white p-4 rounded-xl border-2 ${quality === g.value ? 'border-green-700 bg-green-50/10' : 'border-slate-100'}`}
+          {QUALITY_GRADES.map((g: QualityGradeOption) => (
+            <TouchableOpacity
+              key={g.value}
+              onPress={() => setQuality(g.value)}
+              className={`flex-row items-center bg-white p-4 rounded-xl border-2 ${quality === g.value ? 'border-green-700 bg-green-50/10' : 'border-slate-100'}`} // TODO: Internationalize
               style={quality === g.value ? { borderColor: g.color } : {}}
             >
               <Ionicons name={g.icon as any} size={24} color={quality === g.value ? g.color : '#cbd5e1'} />
@@ -198,26 +204,26 @@ export default function DeliveryEntryScreen({
         </View>
 
         {/* Section 3: Weight Input */}
-        <Text className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-3">3. Pesage (kg)</Text>
+        <Text className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-3">3. Pesage (kg)</Text> {/* TODO: Internationalize */}
         <View className="flex-row gap-3 mb-8">
-          <TextInput 
-            className="flex-1 bg-white rounded-2xl p-5 text-4xl font-black text-slate-900 text-center shadow-sm border border-slate-100" 
-            value={quantity} 
-            onChangeText={setQuantity} 
-            keyboardType="decimal-pad" 
-            placeholder="0.0" 
+          <TextInput
+            className="flex-1 bg-white rounded-2xl p-5 text-4xl font-black text-slate-900 text-center shadow-sm border border-slate-100"
+            value={quantity}
+            onChangeText={setQuantity}
+            keyboardType="decimal-pad"
+            placeholder="0.0"
             placeholderTextColor="#e2e8f0"
           />
-          <TouchableOpacity 
-            onPress={takePhoto} 
+          <TouchableOpacity
+            onPress={takePhoto}
             className="w-20 h-20 rounded-2xl bg-white items-center justify-center border-2 border-dashed border-slate-200 shadow-sm"
-          >
+          > {/* TODO: Internationalize */}
             {photo ? <Image source={{ uri: photo }} className="w-full h-full rounded-2xl" /> : <Ionicons name="camera" size={32} color="#2D6A27" />}
           </TouchableOpacity>
         </View>
 
         {/* Summary */}
-        {total > 0 && (
+        {total > 0 && ( // TODO: Internationalize
           <View className="bg-slate-900 p-6 rounded-3xl items-center mb-6 shadow-lg shadow-black/20">
             <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-[3px]">MONTANT ESTIMÉ</Text>
             <Text className="text-4xl font-black text-white my-2">{total.toLocaleString('fr-FR')} XAF</Text>
@@ -226,15 +232,15 @@ export default function DeliveryEntryScreen({
         )}
 
         {/* Confirm Button */}
-        <TouchableOpacity 
-          className={`py-5 rounded-2xl items-center shadow-lg ${saving || qty <= 0 ? 'bg-slate-300' : 'bg-green-700'}`} 
-          onPress={handleConfirm} 
+        <TouchableOpacity
+          className={`py-5 rounded-2xl items-center shadow-lg ${saving || qty <= 0 ? 'bg-slate-300' : 'bg-green-700'}`}
+          onPress={handleConfirm}
           disabled={saving || qty <= 0}
         >
           {saving ? (
             <ActivityIndicator color="#FFFFFF" />
           ) : (
-            <Text className="text-white text-base font-black tracking-widest">CONFIRMER LA PESÉE</Text>
+            <Text className="text-white text-base font-black tracking-widest">CONFIRMER LA PESÉE</Text> {/* TODO: Internationalize */}
           )}
         </TouchableOpacity>
       </ScrollView>
