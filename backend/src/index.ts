@@ -88,8 +88,8 @@ app.use(
 )
 
 // Webhook Fapshi (URL directe) — doit rester en REST car Fapshi envoie un POST brut
-import { paymentsRouter as legacyPaymentsRouter } from './routes/payments'
-app.use('/api/v1/payments/webhook/fapshi', legacyPaymentsRouter)
+import { fapshiWebhook } from './webhooks/fapshi'
+app.use('/api/v1/payments/webhook/fapshi', fapshiWebhook)
 
 // ─── Gestion d'erreurs globale ─────────────────────────────────────────────────
 

@@ -117,24 +117,4 @@ export const gicRouter = router({
         orderBy: { fullName: 'asc' },
       });
     }),
-
-  /**
-   * Récupère la campagne active d'un GIC
-   */
-  getActiveCampaign: protectedProcedure
-    .input(z.object({ gicId: z.string() }))
-    .query(async ({ input, ctx }) => {
-      if (ctx.user.role !== 'SUPER_ADMIN' && ctx.user.gicId !== input.gicId) {
-        throw new TRPCError({ code: 'FORBIDDEN' });
-      }
-
-      const campaign = await ctx.prisma.campaign.findFirst({
-        where: { gicId: input.gicId, status: 'ACTIVE' },
-        include: {
-          priceRules: { orderBy: { culture: 'asc' } },
-        },
-      });
-
-      return campaign;
-    }),
 });
