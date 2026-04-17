@@ -15,6 +15,7 @@ import * as Crypto from 'expo-crypto';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { db, SQLitePriceRule } from '../db/database';
+import { getDictionary } from '../lib/dictionaries';
 
 interface Producer {
   id: string;
@@ -37,18 +38,13 @@ interface QualityGradeOption {
   icon: 'ribbon-outline' | 'medal-outline' | 'alert-circle-outline';
 }
 
-const QUALITY_GRADES = [
-  { value: 'A', label: 'Grade A', sub: 'Qualité Supérieure', color: '#2D6A27', icon: 'ribbon-outline' },
-  { value: 'B', label: 'Grade B', sub: 'Qualité Standard', color: '#B8860B', icon: 'medal-outline' },
-  { value: 'C', label: 'Grade C', sub: 'Déclassé', color: '#8B3A3A', icon: 'alert-circle-outline' },
-];
-
 export default function DeliveryEntryScreen({
   producer,
   onConfirm,
   onBack,
   campaignId,
 }: DeliveryEntryScreenProps) {
+  const dict = getDictionary();
   const [quantity, setQuantity] = useState('');
   const [quality, setQuality] = useState('A');
   const [culture, setCulture] = useState('');
@@ -56,6 +52,12 @@ export default function DeliveryEntryScreen({
   const [pricePerKg, setPricePerKg] = useState<number | null>(null);
   const [photo, setPhoto] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  const QUALITY_GRADES: QualityGradeOption[] = [
+    { value: 'A', label: dict.quality.gradeA, sub: dict.quality.subA, color: '#2D6A27', icon: 'ribbon-outline' },
+    { value: 'B', label: dict.quality.gradeB, sub: dict.quality.subB, color: '#B8860B', icon: 'medal-outline' },
+    { value: 'C', label: dict.quality.gradeC, sub: dict.quality.subC, color: '#8B3A3A', icon: 'alert-circle-outline' },
+  ];
 
   useEffect(() => {
     loadCultures();
@@ -81,19 +83,19 @@ export default function DeliveryEntryScreen({
         'SELECT * FROM price_rules WHERE campaign_id = ? AND culture = ? AND quality_grade = ?',
         [campaignId, culture, quality]
       ).then((rules: any[]) => {
-        const rule = rules[0] as SQLitePriceRule | undefined; // Type assertion
+        const rule = rules[0] as SQLitePriceRule | undefined;
         setPricePerKg(rule?.price_per_kg ?? null);
       });
     }
   }, [culture, quality]);
 
   const qty = parseFloat(quantity) || 0;
-  const total = pricePerKg ? Math.round(qty * pricePerKg) : 0; // Monetary values are Int (XAF)
+  const total = pricePerKg ? Math.round(qty * pricePerKg) : 0;
 
   async function takePhoto() {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission refusée', 'L\'accès à la caméra est requis.');
+      Alert.alert(dict.collect.permissionDenied, dict.collect.cameraAccess);
       return;
     }
     const result = await ImagePicker.launchCameraAsync({ quality: 0.5, allowsEditing: true });
@@ -102,17 +104,17 @@ export default function DeliveryEntryScreen({
 
   async function handleConfirm() {
     if (!quantity || qty <= 0) {
-      Alert.alert('Saisie invalide', 'Entrez une quantité valide.');
+      Alert.alert(dict.collect.invalidQuantity, dict.collect.enterValidQuantity);
       return;
     }
     if (!pricePerKg) {
-      Alert.alert('Erreur', 'Prix non défini pour ce produit.');
+      Alert.alert(dict.common.error, dict.collect.priceNotDefine);
       return;
     }
 
     setSaving(true);
     try {
-      const offlineUuid = Crypto.randomUUID(); // Use expo-crypto for robust UUID generation
+      const offlineUuid = Crypto.randomUUID();
 
       await db.runAsync(
         `INSERT INTO deliveries (
@@ -121,26 +123,18 @@ export default function DeliveryEntryScreen({
           net_due, created_offline_at, is_synced
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
         [
-          offlineUuid,
-          campaignId,
-          producer.id,
-          culture,
-          qty,
-          quality,
-          photo,
-          null,
-          pricePerKg,
-          total,
-          total,
-          new Date().toISOString(),
+          offlineUuid, campaignId, producer.id, culture, qty, quality,
+          photo, null, pricePerKg, total, total, new Date().toISOString(),
         ]
       );
 
-      Alert.alert('Succès ✓', `Pesée enregistrée pour ${producer.fullName}`, [{ text: 'OK', onPress: onConfirm }]); // TODO: Internationalize
+      Alert.alert(dict.common.success, dict.collect.saveSuccess.replace('{name}', producer.fullName), [
+        { text: dict.common.ok, onPress: onConfirm }
+      ]);
     } catch (err) {
-      console.error('[SQLite] Erreur de sauvegarde:', err);
-      Alert.alert('Erreur', 'Impossible d\'enregistrer dans la base locale.'); // TODO: Internationalize
-    } finally { // TODO: Internationalize all Alert messages
+      console.error('[SQLite] Save error:', err);
+      Alert.alert(dict.common.error, dict.collect.dbError);
+    } finally {
       setSaving(false);
     }
   }
@@ -153,25 +147,25 @@ export default function DeliveryEntryScreen({
         <View className="flex-row items-center justify-between mb-6">
           <TouchableOpacity onPress={onBack} className="w-11 h-11 rounded-full bg-white items-center justify-center shadow-sm">
             <Ionicons name="chevron-back" size={24} color="#2D6A27" />
-          </TouchableOpacity> {/* TODO: Internationalize */}
+          </TouchableOpacity>
           <View className="bg-amber-400 px-3 py-1 rounded-md">
-            <Text className="text-[10px] font-black text-green-950">NOUVELLE PESÉE</Text> {/* TODO: Internationalize */}
+            <Text className="text-[10px] font-black text-green-950">{dict.collect.title}</Text>
           </View>
         </View>
 
         {/* Producer Info */}
         <View className="flex-row items-center bg-white p-4 rounded-2xl mb-6 shadow-sm">
           <View className="w-12 h-12 rounded-full bg-green-700 items-center justify-center mr-4">
-            <Ionicons name="person" size={24} color="#FFFFFF" /> {/* TODO: Internationalize */}
+            <Ionicons name="person" size={24} color="#FFFFFF" />
           </View>
           <View>
-            <Text className="text-lg font-extrabold text-slate-900">{producer.fullName}</Text> {/* TODO: Internationalize */}
+            <Text className="text-lg font-extrabold text-slate-900">{producer.fullName}</Text>
             <Text className="text-sm text-slate-500 font-medium">{producer.phoneMomo}</Text>
           </View>
         </View>
 
         {/* Section 1: Product Selection */}
-        <Text className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-3">1. Choisir le produit</Text>
+        <Text className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-3">{dict.collect.chooseProduct}</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-6">
           {cultures.map(c => (
             <TouchableOpacity
@@ -185,13 +179,13 @@ export default function DeliveryEntryScreen({
         </ScrollView>
 
         {/* Section 2: Quality Selection */}
-        <Text className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-3">2. Qualité du lot</Text> {/* TODO: Internationalize */}
+        <Text className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-3">{dict.collect.chooseQuality}</Text>
         <View className="gap-3 mb-6">
           {QUALITY_GRADES.map((g: QualityGradeOption) => (
             <TouchableOpacity
               key={g.value}
               onPress={() => setQuality(g.value)}
-              className={`flex-row items-center bg-white p-4 rounded-xl border-2 ${quality === g.value ? 'border-green-700 bg-green-50/10' : 'border-slate-100'}`} // TODO: Internationalize
+              className={`flex-row items-center bg-white p-4 rounded-xl border-2 ${quality === g.value ? 'border-green-700 bg-green-50/10' : 'border-slate-100'}`}
               style={quality === g.value ? { borderColor: g.color } : {}}
             >
               <Ionicons name={g.icon as any} size={24} color={quality === g.value ? g.color : '#cbd5e1'} />
@@ -204,7 +198,7 @@ export default function DeliveryEntryScreen({
         </View>
 
         {/* Section 3: Weight Input */}
-        <Text className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-3">3. Pesage (kg)</Text> {/* TODO: Internationalize */}
+        <Text className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-3">{dict.collect.weightKg}</Text>
         <View className="flex-row gap-3 mb-8">
           <TextInput
             className="flex-1 bg-white rounded-2xl p-5 text-4xl font-black text-slate-900 text-center shadow-sm border border-slate-100"
@@ -217,15 +211,15 @@ export default function DeliveryEntryScreen({
           <TouchableOpacity
             onPress={takePhoto}
             className="w-20 h-20 rounded-2xl bg-white items-center justify-center border-2 border-dashed border-slate-200 shadow-sm"
-          > {/* TODO: Internationalize */}
+          >
             {photo ? <Image source={{ uri: photo }} className="w-full h-full rounded-2xl" /> : <Ionicons name="camera" size={32} color="#2D6A27" />}
           </TouchableOpacity>
         </View>
 
         {/* Summary */}
-        {total > 0 && ( // TODO: Internationalize
+        {total > 0 && (
           <View className="bg-slate-900 p-6 rounded-3xl items-center mb-6 shadow-lg shadow-black/20">
-            <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-[3px]">MONTANT ESTIMÉ</Text>
+            <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-[3px]">{dict.collect.estimatedAmount}</Text>
             <Text className="text-4xl font-black text-white my-2">{total.toLocaleString('fr-FR')} XAF</Text>
             <Text className="text-xs text-slate-400 font-medium">{qty} kg × {pricePerKg} XAF/kg</Text>
           </View>
@@ -240,9 +234,13 @@ export default function DeliveryEntryScreen({
           {saving ? (
             <ActivityIndicator color="#FFFFFF" />
           ) : (
-            <Text className="text-white text-base font-black tracking-widest">CONFIRMER LA PESÉE</Text> {/* TODO: Internationalize */}
+            <Text className="text-white text-base font-black tracking-widest">{dict.collect.confirmButton}</Text>
           )}
         </TouchableOpacity>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
       </ScrollView>
     </SafeAreaView>
   );

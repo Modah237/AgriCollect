@@ -1,0 +1,54 @@
+{
+  "common": {
+    "loading": "Loading...",
+    "error": "An error occurred",
+    "success": "Success ✓",
+    "confirm": "Confirm",
+    "cancel": "Cancel",
+    "back": "Back",
+    "ok": "OK"
+  },
+  "collect": {
+    "title": "NEW WEIGH-IN",
+    "producer": "Producer",
+    "chooseProduct": "1. Choose product",
+    "chooseQuality": "2. Lot quality",
+    "weightKg": "3. Weight (kg)",
+    "estimatedAmount": "ESTIMATED AMOUNT",
+    "confirmButton": "CONFIRM WEIGH-IN",
+    "saving": "Saving...",
+    "permissionDenied": "Permission denied",
+    "cameraAccess": "Camera access is required.",
+    "invalidQuantity": "Invalid entry",
+    "enterValidQuantity": "Enter a valid quantity.",
+    "priceNotDefine": "Price not defined for this product.",
+    "saveSuccess": "Weigh-in saved for {name}",
+    "dbError": "Unable to save to local database."
+  },
+  "sync": {
+    "welcome": "Hello, {name} 👋",
+    "pending": "{count} weigh-ins to send",
+    "secured": "Everything is secured",
+    "lastSync": "Last sync: {time}",
+    "waiting": "Waiting for synchronization",
+    "newWeighIn": "New Weigh-in",
+    "newWeighInSub": "Register a delivery",
+    "syncAll": "Synchronize all",
+    "recentActivity": "RECENT ACTIVITY",
+    "noDeliveries": "No deliveries yet.",
+    "syncTitle": "Synchronization",
+    "syncSuccess": "{count} deliveries sent.",
+    "syncUpToDate": "Everything is up to date!",
+    "sessionExpired": "Session expired",
+    "reconnect": "Please reconnect.",
+    "unreachable": "Server unreachable."
+  },
+  "quality": {
+    "gradeA": "Grade A",
+    "gradeB": "Grade B",
+    "gradeC": "Grade C",
+    "subA": "Premium Quality",
+    "subB": "Standard Quality",
+    "subC": "Downgraded"
+  }
+}

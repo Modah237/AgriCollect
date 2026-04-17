@@ -1,0 +1,54 @@
+{
+  "common": {
+    "loading": "Chargement...",
+    "error": "Une erreur est survenue",
+    "success": "Succès ✓",
+    "confirm": "Confirmer",
+    "cancel": "Annuler",
+    "back": "Retour",
+    "ok": "OK"
+  },
+  "collect": {
+    "title": "NOUVELLE PESÉE",
+    "producer": "Producteur",
+    "chooseProduct": "1. Choisir le produit",
+    "chooseQuality": "2. Qualité du lot",
+    "weightKg": "3. Pesage (kg)",
+    "estimatedAmount": "MONTANT ESTIMÉ",
+    "confirmButton": "CONFIRMER LA PESÉE",
+    "saving": "Enregistrement...",
+    "permissionDenied": "Permission refusée",
+    "cameraAccess": "L'accès à la caméra est requis.",
+    "invalidQuantity": "Saisie invalide",
+    "enterValidQuantity": "Entrez une quantité valide.",
+    "priceNotDefine": "Prix non défini pour ce produit.",
+    "saveSuccess": "Pesée enregistrée pour {name}",
+    "dbError": "Impossible d'enregistrer dans la base locale."
+  },
+  "sync": {
+    "welcome": "Bonjour, {name} 👋",
+    "pending": "{count} pesées à envoyer",
+    "secured": "Tout est sécurisé",
+    "lastSync": "Dernière sync : {time}",
+    "waiting": "En attente de synchronisation",
+    "newWeighIn": "Nouvelle Pesée",
+    "newWeighInSub": "Enregistrer une livraison",
+    "syncAll": "Synchroniser tout",
+    "recentActivity": "ACTIVITÉ RÉCENTE",
+    "noDeliveries": "Aucune livraison pour le moment.",
+    "syncTitle": "Synchronisation",
+    "syncSuccess": "{count} livraisons envoyées.",
+    "syncUpToDate": "Tout est à jour !",
+    "sessionExpired": "Session expirée",
+    "reconnect": "Reconnectez-vous.",
+    "unreachable": "Impossible de joindre le serveur."
+  },
+  "quality": {
+    "gradeA": "Grade A",
+    "gradeB": "Grade B",
+    "gradeC": "Grade C",
+    "subA": "Qualité Supérieure",
+    "subB": "Qualité Standard",
+    "subC": "Déclassé"
+  }
+}

@@ -16,6 +16,8 @@ import { fullSync, countPendingDeliveries } from '../sync/syncEngine'
 import { getUser } from '../stores/authStore'
 import { db, SQLiteDelivery } from '../db/database'
 
+import { getDictionary } from '../lib/dictionaries'
+
 interface SyncScreenProps {
   gicId: string
   onNewDelivery: () => void
@@ -23,6 +25,7 @@ interface SyncScreenProps {
 }
 
 export default function SyncScreen({ gicId, onNewDelivery, onLogout }: SyncScreenProps) {
+  const dict = getDictionary()
   const [syncing, setSyncing] = useState(false)
   const [pending, setPending] = useState(0)
   const [lastSync, setLastSync] = useState<Date | null>(null)
@@ -53,14 +56,17 @@ export default function SyncScreen({ gicId, onNewDelivery, onLogout }: SyncScree
       setLastSync(new Date())
       await refresh()
       Alert.alert(
-        'Synchronisation',
-        result.pushed > 0 ? `${result.pushed} livraisons envoyées.` : 'Tout est à jour !'
+        dict.sync.syncTitle,
+        result.pushed > 0 
+          ? dict.sync.syncSuccess.replace('{count}', String(result.pushed)) 
+          : dict.sync.syncUpToDate
       )
-    } catch (err: any) {
-      if (err.message === 'SESSION_EXPIRED') {
-        Alert.alert('Session expirée', 'Reconnectez-vous.', [{ text: 'OK', onPress: onLogout }])
+    } catch (err) {
+      const error = err as Error;
+      if (error.message === 'SESSION_EXPIRED') {
+        Alert.alert(dict.sync.sessionExpired, dict.sync.reconnect, [{ text: 'OK', onPress: onLogout }])
       } else {
-        Alert.alert('Erreur', 'Impossible de joindre le serveur.')
+        Alert.alert(dict.common.error, dict.sync.unreachable)
       }
     } finally {
       setSyncing(false)
@@ -79,7 +85,7 @@ export default function SyncScreen({ gicId, onNewDelivery, onLogout }: SyncScree
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.welcome}>Bonjour, {userName.split(' ')[0]} 👋</Text>
+        <Text style={styles.welcome}>{dict.sync.welcome.replace('{name}', userName.split(' ')[0])}</Text>
 
         {/* Dashboard Status */}
         <LinearGradient
@@ -95,12 +101,14 @@ export default function SyncScreen({ gicId, onNewDelivery, onLogout }: SyncScree
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.statusTitle}>
-              {pending > 0 ? `${pending} pesées à envoyer` : 'Tout est sécurisé'}
+              {pending > 0 
+                ? dict.sync.pending.replace('{count}', String(pending)) 
+                : dict.sync.secured}
             </Text>
             <Text style={styles.statusSub}>
               {lastSync 
-                ? `Dernière sync : ${lastSync.toLocaleTimeString('fr-FR')} ` 
-                : 'En attente de synchronisation'}
+                ? dict.sync.lastSync.replace('{time}', lastSync.toLocaleTimeString()) 
+                : dict.sync.waiting}
             </Text>
           </View>
         </LinearGradient>
@@ -111,8 +119,8 @@ export default function SyncScreen({ gicId, onNewDelivery, onLogout }: SyncScree
             <Ionicons name="add-circle" size={40} color="#FFFFFF" />
           </View>
           <View>
-            <Text style={styles.mainBtnText}>Nouvelle Pesée</Text>
-            <Text style={styles.mainBtnSub}>Enregistrer une livraison</Text>
+            <Text style={styles.mainBtnText}>{dict.sync.newWeighIn}</Text>
+            <Text style={styles.mainBtnSub}>{dict.sync.newWeighInSub}</Text>
           </View>
         </TouchableOpacity>
 
@@ -127,16 +135,16 @@ export default function SyncScreen({ gicId, onNewDelivery, onLogout }: SyncScree
           ) : (
             <View style={styles.syncContent}>
               <Ionicons name="refresh-outline" size={20} color="#2D6A27" />
-              <Text style={styles.syncBtnText}>Synchroniser tout</Text>
+              <Text style={styles.syncBtnText}>{dict.sync.syncAll}</Text>
             </View>
           )}
         </TouchableOpacity>
 
         {/* Activité récente */}
         <View style={styles.activitySection}>
-          <Text style={styles.sectionTitle}>ACTIVITÉ RÉCENTE</Text>
+          <Text style={styles.sectionTitle}>{dict.sync.recentActivity}</Text>
           {recentDeliveries.length === 0 ? (
-            <Text style={styles.emptyText}>Aucune livraison pour le moment.</Text>
+            <Text style={styles.emptyText}>{dict.sync.noDeliveries}</Text>
           ) : (
             recentDeliveries.map((d) => (
               <View key={d.offline_uuid} style={styles.activityCard}>
@@ -146,7 +154,7 @@ export default function SyncScreen({ gicId, onNewDelivery, onLogout }: SyncScree
                 <View style={{ flex: 1 }}>
                   <Text style={styles.activityText}>{d.quantity_kg} kg de {d.culture}</Text>
                   <Text style={styles.activityDate}>
-                    {new Date(d.created_offline_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                    {new Date(d.created_offline_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </Text>
                 </View>
                 {d.is_synced ? (
@@ -158,6 +166,10 @@ export default function SyncScreen({ gicId, onNewDelivery, onLogout }: SyncScree
             ))
           )}
         </View>
+      </ScrollView>
+    </SafeAreaView>
+  )
+}
       </ScrollView>
     </SafeAreaView>
   )
