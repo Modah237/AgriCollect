@@ -65,9 +65,9 @@ export default function DashboardPage({ params }: { params: Promise<{ locale: st
   )
 
   // Use the active campaign query
-  const { data: campaign } = trpc.gic.getProfile.useQuery(
+  const { data: campaign } = trpc.gic.getActiveCampaign.useQuery(
     { gicId },
-    { enabled: !!gicId && !!stats?.campaignName }
+    { enabled: !!gicId }
   )
 
   if (loadingStats || loadingDeliveries) {
