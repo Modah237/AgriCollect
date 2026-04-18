@@ -71,8 +71,22 @@ export default function App() {
   }
 
   async function handleLoginSuccess() {
-    const [savedGicId] = await Promise.all([getGicId()]);
+    const [savedGicId, savedCampaignId] = await Promise.all([getGicId(), getCampaignId()]);
     if (savedGicId) setGicId(savedGicId);
+    if (savedCampaignId) {
+      setCampaignId(savedCampaignId);
+    } else {
+      // Fallback : chercher dans la DB locale (après une sync)
+      try {
+        const rule: any = await db.getFirstAsync('SELECT campaign_id FROM price_rules LIMIT 1');
+        if (rule) {
+          setCampaignId(rule.campaign_id);
+          await saveCampaignId(rule.campaign_id);
+        }
+      } catch {
+        // campaignId reste vide, la sync devra être faite
+      }
+    }
     setScreen('home');
   }
 
