@@ -45,4 +45,6 @@ EXPOSE 3001
 # L'utilisateur node est plus sécurisé
 USER node
 
-CMD ["node", "backend/dist/index.js"]
+# Applique les migrations Prisma PUIS démarre le serveur
+# prisma migrate deploy est idempotent : sans danger en cas de redéploiement
+CMD ["sh", "-c", "npx prisma migrate deploy --schema=./backend/prisma/schema.prisma && node backend/dist/index.js"]
