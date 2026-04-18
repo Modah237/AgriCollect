@@ -1,5 +1,9 @@
+'use client'
+
+import { useState, use } from 'react'
 import { trpc } from '@/lib/trpc'
 import { getUser } from '@/lib/auth'
+import { getDictionary, Locale } from '@/lib/dictionaries'
 
 const STATUS_COLORS: Record<string, string> = {
   PENDING: 'bg-gray-100 text-gray-700',

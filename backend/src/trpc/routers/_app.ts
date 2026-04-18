@@ -6,7 +6,8 @@ import { deliveriesRouter } from './deliveries';
 import { exportsRouter } from './exports';
 import { paymentsRouter } from './payments';
 import { reportsRouter } from './reports';
-import { producersRouter } from './producers'; // Assuming a producers tRPC router will be created
+import { producersRouter } from './producers';
+import { syncRouter } from './sync';
 
 export const appRouter = router({
   gic: gicRouter,
@@ -16,7 +17,8 @@ export const appRouter = router({
   deliveries: deliveriesRouter,
   reports: reportsRouter,
   exports: exportsRouter,
-  producers: producersRouter, // Add producers router
+  producers: producersRouter,
+  sync: syncRouter,
 });
 
 // Export type definition of API

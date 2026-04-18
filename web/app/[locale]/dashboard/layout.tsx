@@ -41,7 +41,7 @@ export default function DashboardLayout({
 
   function handleLogout() {
     clearAuth()
-    document.cookie = 'agricollect_token=; path=/; max-age=0'
+    document.cookie = 'token=; path=/; max-age=0'
     router.push(`/${locale}/login`)
   }
 

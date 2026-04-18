@@ -6,7 +6,7 @@ import { Platform } from 'react-native';
 
 const BASE_URL = Platform.OS === 'web' 
   ? 'http://localhost:3001' 
-  : (process.env.EXPO_PUBLIC_API_URL ?? 'http://192.168.1.115:3001');
+  : (process.env.EXPO_PUBLIC_API_URL ?? 'https://agricollectbackend-production.up.railway.app');
 
 /**
  * Client tRPC pour Mobile (Hooks React)

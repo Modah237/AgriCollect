@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { trpc } from '@/lib/trpc'
+import { getUser } from '@/lib/auth'
 
 export default function DeliveriesPage() {
   const user = getUser()

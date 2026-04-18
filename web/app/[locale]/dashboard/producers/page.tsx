@@ -1,6 +1,7 @@
 'use client'
 
 import { trpc } from '@/lib/trpc'
+import { getUser } from '@/lib/auth'
 
 export default function ProducersPage() {
   const user = getUser()
